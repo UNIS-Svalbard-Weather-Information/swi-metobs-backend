@@ -14,8 +14,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM python:3.13-slim
 WORKDIR /swi
 
-# Create and switch to a non-root user
-RUN useradd -m swi
+RUN useradd -m -u 3000 swi
 USER swi
 
 # Copy only necessary files from the builder stage
