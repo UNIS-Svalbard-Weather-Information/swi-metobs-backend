@@ -14,9 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 FROM python:3.13-slim
 WORKDIR /swi
 
-RUN useradd -m -u 3000 swi
-USER swi
-
 # Copy only necessary files from the builder stage
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
