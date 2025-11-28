@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+from pathlib import Path
 import os
 
 from app.models.forecast import ForecastResponse
@@ -8,7 +9,7 @@ from app.models.forecast import ForecastResponse
 router = APIRouter()
 
 # Base directory where your forecast files are stored
-BASE_DIR = "data/forecast"
+BASE_DIR = Path("./data/forecast")
 
 
 def get_files_for_variable(
