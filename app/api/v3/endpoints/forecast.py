@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Response, Request
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Literal
 from pathlib import Path
@@ -70,7 +70,7 @@ def get_files_for_variable(
                     files.append(
                         {
                             "model": model,
-                            "file_path": str(model_dir / filename),
+                            "file_path": str(filename),
                             "timestamp": timestamp_str,
                         }
                     )
@@ -79,12 +79,12 @@ def get_files_for_variable(
 
 
 @router.get("/forecast/", response_model=ForecastResponse)
-async def get_forecast(
+async def get_available_forecast(
     variable: str,
     file_type: Literal["cog", "velocity"] = "cog",
     model: Optional[List[str]] = Query(
         None,
-        description="List of models to filter by (e.g., aa, bb). If not provided, all models are returned.",
+        description="List of models to filter by (aa = Arome Arctic). If not provided, all models are returned.",
     ),
     start_hour: int = Query(
         -24, description="Start hour offset from now (e.g., -24 for 24 hours ago)"
@@ -115,16 +115,38 @@ async def get_forecast(
 
 
 @router.get("/forecast/velocity/{model}/{filename}")
-async def get_velocity_file(model: str, filename: str, response: Response):
+async def get_leaflet_velocity_file(
+    model: str, filename: str, request: Request, response: Response
+):
     """
-    Endpoint to download a specific velocity file.
+    Endpoint to download a gzipped velocity file.
+    Clients must send 'Accept-Encoding: gzip' in the request headers.
+    Careful, this wont work in swagger UI.
     """
+    # Check if the client accepts gzip encoding
+    accept_encoding = request.headers.get("Accept-Encoding", "")
+    if "gzip" not in accept_encoding.lower():
+        raise HTTPException(
+            status_code=406,  # Not Acceptable
+            detail="Client must accept gzip encoding. Send 'Accept-Encoding: gzip' header.",
+        )
+
     file_path = BASE_DIR / model / "velocity" / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Velocity file not found")
 
-    # Set Cache-Control header for 10 minutes
+    # Set the correct headers for a gzipped JSON response
     response.headers["Cache-Control"] = "public, max-age=600"
     response.headers["Content-Encoding"] = "gzip"
-    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
-    return Response(content=file_path.read_bytes(), media_type="application/json")
+    response.headers["Content-Type"] = "application/json"
+    # response.headers["Content-Disposition"] = f"inline; filename={filename}"
+
+    # Stream the file to avoid loading large files into memory
+    with open(file_path, "rb") as f:
+        gzipped_content = f.read()
+
+    return Response(
+        content=gzipped_content,
+        media_type="application/json",
+        headers=response.headers,
+    )
