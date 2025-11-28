@@ -92,6 +92,7 @@ async def get_forecast(
     end_hour: int = Query(
         24, description="End hour offset from now (e.g., 24 for 24 hours ahead)"
     ),
+    response: Response = None,  # Add Response parameter for headers
 ):
     """
     Endpoint to get forecast files (COG or velocity) for a specific variable, model, and hour range.
@@ -107,6 +108,9 @@ async def get_forecast(
             detail=f"No {file_type} files found for the given variable, model, and hour range",
         )
 
+    # Set Cache-Control header for 10 minutes
+    response.headers["Cache-Control"] = "public, max-age=600"
+
     return files
 
 
@@ -119,6 +123,8 @@ async def get_velocity_file(model: str, filename: str, response: Response):
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Velocity file not found")
 
+    # Set Cache-Control header for 10 minutes
+    response.headers["Cache-Control"] = "public, max-age=600"
     response.headers["Content-Encoding"] = "gzip"
     response.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return Response(content=file_path.read_bytes(), media_type="application/json")
