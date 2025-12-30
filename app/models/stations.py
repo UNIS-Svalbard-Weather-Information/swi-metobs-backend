@@ -7,11 +7,14 @@ import re
 class StationIDModel(BaseModel):
     id: str
 
-    @field_validator('id')
+    @field_validator("id")
     def validate_id(cls, v: str) -> str:
-        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
-            raise ValueError('Invalid station ID format. Only letters, numbers, underscores, and hyphens are allowed.')
+        if not re.match(r"^[a-zA-Z0-9_-]+$", v):
+            raise ValueError(
+                "Invalid station ID format. Only letters, numbers, underscores, and hyphens are allowed."
+            )
         return v
+
 
 class StationPosition(BaseModel):
     lat: Optional[float] = None
@@ -73,23 +76,26 @@ class StationTimeseries(StationIDModel):
     # station_id: str
     timeseries: List[StationTimeseriesDataPoint]
 
+
 class StationsAvailableHistoricalDates(StationIDModel):
     # station_id: str
     min_date: str
     max_date: str
     available_dates: List[str]
 
+
 class DateRangeModel(BaseModel):
     start_date: str
     end_date: str
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     def validate_iso_date(cls, v: str) -> str:
         try:
             datetime.strptime(v, "%Y-%m-%d")
         except ValueError:
-            raise ValueError('Invalid date format. Use YYYY-MM-DD.')
+            raise ValueError("Invalid date format. Use YYYY-MM-DD.")
         return v
+
 
 class StationDataRequestModel(StationIDModel):
     start_date: str
@@ -97,19 +103,19 @@ class StationDataRequestModel(StationIDModel):
     variables: Optional[List[str]] = None
     resample: bool = False
 
-    @field_validator('start_date', 'end_date')
+    @field_validator("start_date", "end_date")
     def validate_iso_date(cls, v: str) -> str:
         try:
             datetime.strptime(v, "%Y-%m-%d")
         except ValueError:
-            raise ValueError('Invalid date format. Use YYYY-MM-DD.')
+            raise ValueError("Invalid date format. Use YYYY-MM-DD.")
         return v
-    
-    @field_validator('variables', mode='before')
+
+    @field_validator("variables", mode="before")
     def validate_variable_names(cls, v: Optional[List[str]]) -> Optional[List[str]]:
         if v is None:
             return v
-        pattern = re.compile(r'^[a-zA-Z0-9_-]+$')
+        pattern = re.compile(r"^[a-zA-Z0-9_-]+$")
         for var in v:
             if not pattern.match(var):
                 raise ValueError(

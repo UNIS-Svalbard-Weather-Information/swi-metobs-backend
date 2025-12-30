@@ -107,7 +107,6 @@ class TestStationModels:
         assert request.variables == ["temperature", "humidity"]
         assert request.resample is False
 
-
     def test_stations_available_historical_dates(self):
         hdata = StationsAvailableHistoricalDates(
             id="STATION01",

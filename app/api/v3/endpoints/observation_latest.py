@@ -53,7 +53,8 @@ async def get_station_observations(station_id: str, offset: int = 0):
     # Validate the offset
     if offset < MIN_TIME_OFFSET or offset > MAX_TIME_OFFSET:
         raise HTTPException(
-            status_code=400, detail=f"Offset out of range. Must be between {MIN_TIME_OFFSET} and {MIN_TIME_OFFSET if enable_forecast else 0}."
+            status_code=400,
+            detail=f"Offset out of range. Must be between {MIN_TIME_OFFSET} and {MIN_TIME_OFFSET if enable_forecast else 0}.",
         )
 
     # Determine if we are asking for forecast data

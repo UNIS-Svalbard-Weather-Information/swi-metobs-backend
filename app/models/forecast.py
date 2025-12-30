@@ -2,6 +2,7 @@ from pydantic import BaseModel, field_validator
 from typing import List, Optional, Literal
 import re
 
+
 class ForecastFile(BaseModel):
     model: str
     file_path: str
@@ -9,6 +10,7 @@ class ForecastFile(BaseModel):
 
 
 ForecastResponse = List[ForecastFile]
+
 
 class ForecastRequestModel(BaseModel):
     variable: str
@@ -29,7 +31,7 @@ class ForecastRequestModel(BaseModel):
         """Ensure variable name is valid."""
         if not v or not v.strip():
             raise ValueError("Variable cannot be empty")
-        pattern = re.compile(r'^[a-zA-Z0-9_-]+$')
+        pattern = re.compile(r"^[a-zA-Z0-9_-]+$")
         if not pattern.match(v):
             raise ValueError(
                 f"Invalid variable name: '{v}'. Only letters, numbers, '_', and '-' are allowed."
@@ -41,7 +43,7 @@ class ForecastRequestModel(BaseModel):
         """Ensure all model names are valid."""
         if v is None:
             return v
-        pattern = re.compile(r'^[a-zA-Z0-9_-]+$')
+        pattern = re.compile(r"^[a-zA-Z0-9_-]+$")
         for model in v:
             if not model.strip() or not pattern.match(model):
                 raise ValueError(

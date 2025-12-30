@@ -15,5 +15,7 @@ api_router.include_router(
     observation_latest.router, prefix="/observations", tags=["Latest Observations"]
 )
 api_router.include_router(
-    observation_historical.router, prefix="/historical", tags=["Historical Observations"]
+    observation_historical.router,
+    prefix="/historical",
+    tags=["Historical Observations"],
 )

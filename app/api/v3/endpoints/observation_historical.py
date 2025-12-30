@@ -146,7 +146,7 @@ async def get_available_historical_time_range_for_a_station(
     """
     logger.info("ok")
     handle_validation_error(StationIDModel, id=station_id)
-    
+
     try:
         if not check_station_exists(station_id):
             logger.error("Station not found: {}".format(station_id))
