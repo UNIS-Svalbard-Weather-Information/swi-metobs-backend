@@ -95,15 +95,31 @@ def test_safe_join_relative_empty_paths(tmp_path):
     assert result == Path(".")
 
 
-def test_safe_join_symlink_traversal(tmp_path):
+def test_safe_join_symlink_traversal_outside_base(tmp_path):
     base = tmp_path
     subdir = base / "subdir"
     subdir.mkdir()
+    # Symlink pointing outside the base directory
+    outside_target = base.parent / "outside"
+    outside_target.touch()
     symlink = subdir / "symlink"
+    symlink.symlink_to(outside_target)
+
+    # This should raise an HTTPException
+    with pytest.raises(HTTPException) as excinfo:
+        safe_join(base, "subdir", "symlink")
+    assert excinfo.value.status_code == 500
+
+
+def test_safe_join_symlink_inside_base(tmp_path):
+    base = tmp_path
+    subdir = base / "subdir"
+    subdir.mkdir()
     target = base / "target"
     target.touch()
+    symlink = subdir / "symlink"
     symlink.symlink_to(target)
 
-    # Test with symlink (should resolve to target, but still be relative to base)
+    # This should work (target is inside the base)
     result = safe_join(base, "subdir", "symlink")
-    assert result == base / "subdir" / "symlink"
+    assert result == target
