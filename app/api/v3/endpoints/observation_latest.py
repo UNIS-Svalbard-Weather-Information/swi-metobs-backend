@@ -27,9 +27,11 @@ def load_data(file_path: str) -> Dict[str, Any]:
         with open(file_path, "r") as file:
             return json.load(file)
     except FileNotFoundError:
-        raise HTTPException(status_code=404, detail="Data file not found")
+        logger.error("File {} not found".format(file_path))
+        raise HTTPException(status_code=404, detail="Data not found")
     except json.JSONDecodeError:
-        raise HTTPException(status_code=500, detail="Invalid JSON data")
+        logger.error("Invalid JSON File")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @router.get(
