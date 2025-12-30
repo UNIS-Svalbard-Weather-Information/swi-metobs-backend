@@ -66,3 +66,9 @@ class StationTimeseriesDataPoint(BaseModel):
 class StationTimeseries(BaseModel):
     station_id: str
     timeseries: List[StationTimeseriesDataPoint]
+
+class StationsAvailableHistoricalDates(BaseModel):
+    station_id: str
+    min_date: datetime
+    max_date: datetime
+    available_dates: List[datetime]

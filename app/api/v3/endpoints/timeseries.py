@@ -1,6 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query
-from typing import List, Dict, Any
-from app.models.stations_data import StationTimeseries, StationTimeseriesDataPoint
+from typing import List, Dict, Any, Optional
+from app.models.stations_data import (
+    StationTimeseries,
+    StationTimeseriesDataPoint,
+    StationPosition,
+    StationsAvailableHistoricalDates,
+)
+import dask.dataframe as dd
+from dask.diagnostics import ProgressBar
 import os
 import pandas as pd
 import json
@@ -172,45 +179,48 @@ async def get_available_historical_time_range_for_a_station(station_id: str):
                 status_code=404, detail="No timeseries data available for this station"
             )
 
-        return {
-            "station_id": station_id,
-            "min_date": min(dates),
-            "max_date": max(dates),
-            "available_dates": dates,
-        }
+        return StationsAvailableHistoricalDates(
+            station_id=station_id,
+            min_date=min(dates).to_pydatetime(),
+            max_date=max(dates).to_pydatetime(),
+            available_dates=[d.to_pydatetime() for d in dates],
+        )
+
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error getting date range: {str(e)}"
+            status_code=500, detail="Internal Server Error when getting the available time range"
         )
 
 
-@router.get(
-    "/{station_id}",
-    response_model=StationTimeseries,
-    responses={
-        400: {"description": "Invalid date range or too many timesteps requested"},
-        404: {"description": "Station or date range not found"},
-        500: {"description": "Error reading timeseries data"},
-    },
-)
+@router.get("/{station_id}", response_model=StationTimeseries)
 async def get_station_historical_observations(
     station_id: str,
-    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
-    end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
+    start_date: str = Query(..., description="Start date in YYYY-%m-%d format"),
+    end_date: str = Query(..., description="End date in YYYY-%m-%d format"),
+    variables: Optional[List[str]] = Query(
+        None, description="List of variables to fetch"
+    ),
+    resample: bool = Query(
+        False,
+        description="Flag to enable resampling of observations if exceeding max timesteps",
+    ),
 ):
     """
-    Get timeseries data for a specific station and date range
+    Get the historical time serie data for a given station.
     """
     try:
         # Check if station exists
         if not check_station_exists(station_id):
-            raise HTTPException(status_code=404, detail="Station not found")
+            raise HTTPException(
+                status_code=404, detail=f"Station {station_id} not found"
+            )
 
         # Get all available dates for the station
         all_dates = get_available_dates_for_station(station_id)
         if not all_dates:
             raise HTTPException(
-                status_code=404, detail="No timeseries data available for this station"
+                status_code=404,
+                detail=f"Historical data not available for station {station_id}",
             )
 
         # Filter dates within the requested range
@@ -218,57 +228,68 @@ async def get_station_historical_observations(
         if not filtered_dates:
             raise HTTPException(
                 status_code=404,
-                detail="No timeseries data available for the requested date range",
+                detail=f"Historical data available for the station {station_id} in the date range {start_date} to {end_date}.",
             )
 
-        # Load data from all files in the date range
-        all_timeseries = []
-        for date in filtered_dates:
-            file_path = os.path.join(
-                LONG_TIMESERIES_PATH, station_id, f"{date}.parquet"
-            )
-            try:
-                df = pd.read_parquet(file_path)
+        # Build the list of Parquet files to read
+        parquet_files = [
+            os.path.join(LONG_TIMESERIES_PATH, station_id, f"{date}.parquet")
+            for date in filtered_dates
+        ]
 
-                # Convert DataFrame to list of dictionaries
-                for index, row in df.iterrows():
-                    data_point = {
-                        "timestamp": index.to_pydatetime(),
-                    }
-                    for column in df.columns:
-                        data_point[column] = row.get(column)
-                    all_timeseries.append(data_point)
-            except FileNotFoundError:
-                continue  # Skip missing files
-            except Exception as e:
-                raise HTTPException(
-                    status_code=500,
-                    detail=f"Error reading timeseries data for {date}: {str(e)}",
+        # Use Dask to read all Parquet files and filter by date range and variables
+        ddf = dd.read_parquet(parquet_files)
+        if variables:
+            variables_availables = [var for var in variables if var in ddf.columns]
+            if "latitude" in ddf.columns and "longitude" in ddf.columns:
+                variables_availables.extend(["latitude", "longitude"])
+            ddf = ddf[variables_availables]
+        ddf = ddf.loc[start_date:end_date]
+
+        # Compute the Dask DataFrame to a Pandas DataFrame
+        index = ddf.index.compute()
+
+        if len(index) > MAX_TIMESTEPS and not resample:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Requested data exceeds maximum allowed timesteps ({MAX_TIMESTEPS}). Please narrow the date range or enable resampling.",
+            )
+        elif len(index) > MAX_TIMESTEPS and resample:
+            total_minutes = (index.max() - index.min()).total_seconds() / 60
+            interval_minutes = total_minutes / MAX_TIMESTEPS
+            resample_interval = int(interval_minutes // 10) * 10
+            ddf = ddf.resample(f"{resample_interval}min").mean()
+
+        df = ddf.compute()
+
+        # Convert DataFrame to list of StationTimeseriesDataPoint
+        timeseries = []
+        for index, row in df.iterrows():
+            data_point = {}
+
+            # Check if 'latitude' and 'longitude' are in the columns
+            if "latitude" in df.columns and "longitude" in df.columns:
+                data_point["location"] = StationPosition(
+                    lat=row.get("latitude"), lon=row.get("longitude")
                 )
 
-        # Sort by timestamp
-        all_timeseries.sort(key=lambda x: x["timestamp"])
+            # Add the other variables
+            for column in df.columns:
+                if column not in [
+                    "latitude",
+                    "longitude",
+                ]:  # Skip as already added to 'location'
+                    data_point[column] = row.get(column)
 
-        # Limit to MAX_TIMESTEPS
-        if len(all_timeseries) > MAX_TIMESTEPS:
-            all_timeseries = all_timeseries[:MAX_TIMESTEPS]
-
-        # Convert to StationTimeseries model
-        timeseries_data_points = []
-        for point in all_timeseries:
-            # Filter out None values to avoid validation issues
-            filtered_data = {
-                k: v for k, v in point.items() if v is not None and k != "timestamp"
-            }
-            data_point = StationTimeseriesDataPoint(
-                timestamp=point["timestamp"], **filtered_data
+            timeseries.append(
+                StationTimeseriesDataPoint(
+                    timestamp=index.to_pydatetime(), **data_point
+                )
             )
-            timeseries_data_points.append(data_point)
+        return StationTimeseries(station_id=station_id, timeseries=timeseries)
 
-        return StationTimeseries(
-            station_id=station_id, timeseries=timeseries_data_points
-        )
     except Exception as e:
         raise HTTPException(
-            status_code=500, detail=f"Error loading timeseries data range: {str(e)}"
+            status_code=500,
+            detail=f"Error loading timeseries data range: {str(e)}",
         )
