@@ -112,6 +112,7 @@ async def get_available_forecast(
     )
 
     if not BASE_DIR.exists():
+        logger.error("Forecast directory {} not availabale.".format(BASE_DIR))
         raise HTTPException(status_code=404, detail="Forecast not available")
 
     files = get_files_for_variable(variable, model, file_type, start_hour, end_hour)
