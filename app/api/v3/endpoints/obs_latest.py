@@ -36,7 +36,7 @@ def load_data(file_path: str) -> Dict[str, Any]:
         500: {"description": "Invalid JSON data"},
     },
 )
-async def get_station_data(station_id: str, offset: int = 0):
+async def get_stations_observations(station_id: str, offset: int = 0):
     """
     Get data for a specific station with optional time offset.
     - offset: 0 for latest data, negative for past data, positive for forecast data.
@@ -82,7 +82,7 @@ async def get_station_data(station_id: str, offset: int = 0):
         500: {"description": "Invalid JSON data"},
     },
 )
-async def get_all_stations_data(offset: int = 0):
+async def get_all_stations_observations(offset: int = 0):
     """
     Get data for all stations with optional time offset.
     - offset: 0 for latest data, negative for past data, positive for forecast data.
