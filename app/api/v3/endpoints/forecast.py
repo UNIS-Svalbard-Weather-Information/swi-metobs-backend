@@ -78,7 +78,7 @@ def get_files_for_variable(
     return files
 
 
-@router.get("/forecast/", response_model=ForecastResponse)
+@router.get("/list/", response_model=ForecastResponse)
 async def get_available_forecast(
     variable: str,
     file_type: Literal["cog", "velocity"] = "cog",
@@ -114,7 +114,7 @@ async def get_available_forecast(
     return files
 
 
-@router.get("/forecast/velocity/{model}/{filename}")
+@router.get("/files/velocity/{model}/{filename}")
 async def get_leaflet_velocity_file(
     model: str, filename: str, request: Request, response: Response
 ):
