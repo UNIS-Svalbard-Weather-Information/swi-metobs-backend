@@ -15,5 +15,5 @@ api_router.include_router(
     obs_latest.router, prefix="/observations", tags=["Latest Observations"]
 )
 api_router.include_router(
-    timeseries.router, prefix="/timeseries", tags=["Long Term Timeseries"]
+    timeseries.router, prefix="/historical", tags=["Historical Observations"]
 )

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, status
 from typing import List, Dict, Any, Optional
 from app.models.stations_data import (
     StationTimeseries,
@@ -11,6 +11,8 @@ from dask.diagnostics import ProgressBar
 import os
 import pandas as pd
 import json
+from loguru import logger
+from datetime import datetime
 
 router = APIRouter()
 
@@ -25,7 +27,14 @@ MAX_TIMESTEPS = 200
 
 
 def get_available_dates_for_station(station_id: str) -> List[str]:
-    """Get list of available dates for a specific station"""
+    """Get list of available dates for a specific station.
+
+    Args:
+        station_id (str): The ID of the station.
+
+    Returns:
+        List[str]: A sorted list of available dates for the station.
+    """
     station_path = os.path.join(LONG_TIMESERIES_PATH, station_id)
     try:
         files = [
@@ -35,11 +44,24 @@ def get_available_dates_for_station(station_id: str) -> List[str]:
         ]
         return sorted(files)
     except FileNotFoundError:
+        logger.error(f"Station path not found for station_id: {station_id}")
         return []
 
 
 def load_timeseries_data(station_id: str, date: str) -> Dict[str, Any]:
-    """Load timeseries data from parquet file"""
+    """Load timeseries data from parquet file.
+
+    Args:
+        station_id (str): The ID of the station.
+        date (str): The date for which to load the timeseries data.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the station ID, date, and timeseries data.
+
+    Raises:
+        HTTPException: 404 if the station is not found or the timeseries data file is not found.
+        HTTPException: 500 if there is an error reading the timeseries data.
+    """
     file_path = os.path.join(LONG_TIMESERIES_PATH, station_id, f"{date}.parquet")
 
     try:
@@ -61,24 +83,40 @@ def load_timeseries_data(station_id: str, date: str) -> Dict[str, Any]:
 
         return {"station_id": station_id, "date": date, "timeseries": timeseries}
     except FileNotFoundError:
+        logger.error(
+            f"Timeseries data file not found for station_id: {station_id} and date: {date}"
+        )
         raise HTTPException(status_code=404, detail="Timeseries data file not found")
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error reading timeseries data: {str(e)}"
+        logger.error(
+            f"Error reading timeseries data for station_id: {station_id} and date: {date}: {str(e)}"
         )
+        raise HTTPException(status_code=500, detail="Error reading timeseries data")
 
 
 def check_station_exists(station_id: str) -> bool:
-    """Check if station exists in stations status data"""
+    """Check if station exists in stations status data.
+
+    Args:
+        station_id (str): The ID of the station.
+
+    Returns:
+        bool: True if the station exists, False otherwise.
+    """
     try:
         with open(STATIONS_STATUS_PATH, "r") as file:
             stations_data = json.load(file)
             return station_id in stations_data
     except FileNotFoundError:
+        logger.error(f"Stations status file not found at path: {STATIONS_STATUS_PATH}")
         return False
     except json.JSONDecodeError:
+        logger.error(
+            f"Error decoding JSON from stations status file at path: {STATIONS_STATUS_PATH}"
+        )
         return False
-    except Exception:
+    except Exception as e:
+        logger.error(f"Unexpected error checking station existence: {str(e)}")
         return False
 
 
@@ -92,7 +130,13 @@ def check_station_exists(station_id: str) -> bool:
 )
 async def get_stations_where_historical_data_are_available():
     """
-    Get list of stations with available long term timeseries data
+    Get list of stations with available long term timeseries data.
+
+    Returns:
+        List[str]: A list of station IDs with available long-term timeseries data.
+
+    Raises:
+        HTTPException: 404 if no stations with long timeseries data are found.
     """
     try:
         stations = [
@@ -101,9 +145,13 @@ async def get_stations_where_historical_data_are_available():
             if os.path.isdir(os.path.join(LONG_TIMESERIES_PATH, d))
         ]
     except FileNotFoundError:
+        logger.error(
+            f"Long timeseries data directory not found at path: {LONG_TIMESERIES_PATH}"
+        )
         stations = []
 
     if not stations:
+        logger.error("No stations with long timeseries data found")
         raise HTTPException(
             status_code=404, detail="No stations with long timeseries data found"
         )
@@ -123,16 +171,30 @@ async def get_available_variables_for_the_station_historical_observations(
     station_id: str,
 ):
     """
-    Get list of available variables in timeseries data for a specific station
+    Get list of available variables in timeseries data for a specific station.
+
+    Args:
+        station_id (str): The ID of the station.
+
+    Returns:
+        List[str]: A list of available variables for the station.
+
+    Raises:
+        HTTPException: 404 if the station is not found or no variables are found.
+        HTTPException: 500 if there is an error getting available variables.
     """
     try:
         # Check if station exists
         if not check_station_exists(station_id):
+            logger.error(f"Station not found: {station_id}")
             raise HTTPException(status_code=404, detail="Station not found")
 
         # Get available variables from a sample file
         dates = get_available_dates_for_station(station_id)
         if not dates:
+            logger.error(
+                f"No variables found in timeseries data for station_id: {station_id}"
+            )
             raise HTTPException(
                 status_code=404, detail="No variables found in timeseries data"
             )
@@ -145,50 +207,74 @@ async def get_available_variables_for_the_station_historical_observations(
         df = pd.read_parquet(file_path)
         variables = list(df.columns)
         if not variables:
+            logger.error(
+                f"No variables found in timeseries data for station_id: {station_id}"
+            )
             raise HTTPException(
                 status_code=404, detail="No variables found in timeseries data"
             )
 
         return variables
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Error getting available variables: {str(e)}"
+        logger.error(
+            f"Error getting available variables for station_id: {station_id}: {str(e)}"
         )
+        raise HTTPException(status_code=500, detail="Error getting available variables")
 
 
 @router.get(
     "/{station_id}/date-range",
-    response_model=Dict[str, Any],
+    response_model=StationsAvailableHistoricalDates,
     responses={
         404: {"description": "Station not found or no timeseries data available"},
-        500: {"description": "Error getting date range"},
+        500: {"description": "Internal server error"},
     },
 )
-async def get_available_historical_time_range_for_a_station(station_id: str):
+async def get_available_historical_time_range_for_a_station(
+    station_id: str,
+) -> StationsAvailableHistoricalDates:
     """
-    Get date range for a specific station's timeseries data
+    Get the available date range for a specific station's timeseries data.
+
+    Args:
+        station_id (str): The ID of the station.
+
+    Returns:
+        StationsAvailableHistoricalDates: An object containing the min, max, and all available dates.
+
+    Raises:
+        HTTPException: 404 if the station is not found or has no data, 500 for internal errors.
     """
     try:
         # Check if station exists
         if not check_station_exists(station_id):
-            raise HTTPException(status_code=404, detail="Station not found")
+            logger.error(f"Station not found: {station_id}")
+            raise HTTPException(
+                status_code=404, detail="Station not found"
+            )
 
         dates = get_available_dates_for_station(station_id)
         if not dates:
+            logger.error(f"No timeseries data available for station_id: {station_id}")
             raise HTTPException(
-                status_code=404, detail="No timeseries data available for this station"
+                status_code=404,
+                detail="No timeseries data available for this station",
             )
 
         return StationsAvailableHistoricalDates(
             station_id=station_id,
-            min_date=min(dates).to_pydatetime(),
-            max_date=max(dates).to_pydatetime(),
-            available_dates=[d.to_pydatetime() for d in dates],
+            min_date=min(dates),
+            max_date=max(dates),
+            available_dates=dates,
         )
 
     except Exception as e:
+        logger.error(
+            f"Internal server error when getting the available time range for station_id: {station_id}: {str(e)}"
+        )
         raise HTTPException(
-            status_code=500, detail="Internal Server Error when getting the available time range"
+            status_code=500,
+            detail="Internal server error when getting the available time range",
         )
 
 
@@ -207,10 +293,26 @@ async def get_station_historical_observations(
 ):
     """
     Get the historical time serie data for a given station.
+
+    Args:
+        station_id (str): The ID of the station.
+        start_date (str): The start date in YYYY-%m-%d format.
+        end_date (str): The end date in YYYY-%m-%d format.
+        variables (Optional[List[str]]): List of variables to fetch.
+        resample (bool): Flag to enable resampling of observations if exceeding max timesteps.
+
+    Returns:
+        StationTimeseries: The historical timeseries data for the station.
+
+    Raises:
+        HTTPException: 404 if the station is not found or no data is available in the date range.
+        HTTPException: 400 if the requested data exceeds the maximum allowed timesteps.
+        HTTPException: 500 if there is an error loading the timeseries data range.
     """
     try:
         # Check if station exists
         if not check_station_exists(station_id):
+            logger.error(f"Station not found: {station_id}")
             raise HTTPException(
                 status_code=404, detail=f"Station {station_id} not found"
             )
@@ -218,6 +320,7 @@ async def get_station_historical_observations(
         # Get all available dates for the station
         all_dates = get_available_dates_for_station(station_id)
         if not all_dates:
+            logger.error(f"Historical data not available for station_id: {station_id}")
             raise HTTPException(
                 status_code=404,
                 detail=f"Historical data not available for station {station_id}",
@@ -226,9 +329,12 @@ async def get_station_historical_observations(
         # Filter dates within the requested range
         filtered_dates = [date for date in all_dates if start_date <= date <= end_date]
         if not filtered_dates:
+            logger.error(
+                f"No historical data available for station_id: {station_id} in the date range {start_date} to {end_date}"
+            )
             raise HTTPException(
                 status_code=404,
-                detail=f"Historical data available for the station {station_id} in the date range {start_date} to {end_date}.",
+                detail=f"Historical data not available for the station {station_id} in the date range {start_date} to {end_date}.",
             )
 
         # Build the list of Parquet files to read
@@ -250,6 +356,9 @@ async def get_station_historical_observations(
         index = ddf.index.compute()
 
         if len(index) > MAX_TIMESTEPS and not resample:
+            logger.error(
+                f"Requested data exceeds maximum allowed timesteps ({MAX_TIMESTEPS}) for station_id: {station_id}"
+            )
             raise HTTPException(
                 status_code=400,
                 detail=f"Requested data exceeds maximum allowed timesteps ({MAX_TIMESTEPS}). Please narrow the date range or enable resampling.",
@@ -288,8 +397,14 @@ async def get_station_historical_observations(
             )
         return StationTimeseries(station_id=station_id, timeseries=timeseries)
 
+    except HTTPException:
+        # Re-raise HTTP exceptions to avoid catching them here
+        raise
     except Exception as e:
+        logger.error(
+            f"Error loading timeseries data range for station_id: {station_id}: {str(e)}"
+        )
         raise HTTPException(
             status_code=500,
-            detail=f"Error loading timeseries data range: {str(e)}",
+            detail="Serveur error loading timeseries data range",
         )
