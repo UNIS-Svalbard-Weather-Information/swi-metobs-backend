@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from typing import List, Optional
-from app.models.stations_data import (
+from app.models.stations import (
     StationTimeseries,
     StationTimeseriesDataPoint,
     StationPosition,
@@ -144,7 +144,9 @@ async def get_available_historical_time_range_for_a_station(
     """
     Get the available date range for a specific station's timeseries data.
     """
+    logger.info("ok")
     handle_validation_error(StationIDModel, id=station_id)
+    
     try:
         if not check_station_exists(station_id):
             logger.error("Station not found: {}".format(station_id))

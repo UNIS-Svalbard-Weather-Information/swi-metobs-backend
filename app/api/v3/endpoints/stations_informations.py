@@ -1,7 +1,7 @@
 from fastapi import HTTPException, APIRouter
 import json
 from pathlib import Path
-from app.models.stations_data import StationMetadata, StationIDModel
+from app.models.stations import StationMetadata, StationIDModel
 from app.utils.error import handle_validation_error
 
 # Get the router from parent

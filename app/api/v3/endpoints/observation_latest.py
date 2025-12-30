@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from app.models.stations_data import StationTimeseries, StationIDModel
+from app.models.stations import StationTimeseries, StationIDModel
 from app.utils.error import handle_validation_error
 import os
 import json
