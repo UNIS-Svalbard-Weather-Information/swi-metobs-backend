@@ -22,7 +22,7 @@ def get_files_for_variable(
     Returns a list of files (COG or velocity) for the given variable, models, and hour range.
     """
     files = []
-    now = datetime.utcnow()
+    now = datetime.now(datetime.timezone.utc)
 
     # Calculate the time range
     start_time = now + timedelta(hours=start_hour)
