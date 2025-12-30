@@ -10,6 +10,9 @@ router = APIRouter()
 # Define path for long term timeseries data
 LONG_TIMESERIES_PATH = "./data/000_long_timeseries"
 
+# Define path for stations status data
+STATIONS_STATUS_PATH = "./data/000_stations_status/all_dict.json"
+
 # Maximum number of time steps to return
 MAX_TIMESTEPS = 200
 
@@ -41,6 +44,25 @@ def get_available_dates_for_station(station_id: str) -> List[str]:
         return []
 
 
+def get_available_variables_from_sample(station_id: str) -> List[str]:
+    """Get list of available variables from a sample parquet file"""
+    try:
+        dates = get_available_dates_for_station(station_id)
+        if not dates:
+            return []
+
+        # Use the first available date to get a sample of the variables
+        sample_date = dates[0]
+        file_path = os.path.join(
+            LONG_TIMESERIES_PATH, station_id, f"{sample_date}.parquet"
+        )
+        df = pd.read_parquet(file_path)
+        return list(df.columns)
+    except Exception as e:
+        print(f"Error getting available variables: {str(e)}")
+        return []
+
+
 def load_timeseries_data(station_id: str, date: str) -> Dict[str, Any]:
     """Load timeseries data from parquet file"""
     file_path = os.path.join(LONG_TIMESERIES_PATH, station_id, f"{date}.parquet")
@@ -57,12 +79,9 @@ def load_timeseries_data(station_id: str, date: str) -> Dict[str, Any]:
         for index, row in df.iterrows():
             data_point = {
                 "timestamp": index.to_pydatetime(),
-                "airTemperature": row.get("airTemperature"),
-                "windSpeed": row.get("windSpeed"),
-                "windDirection": row.get("windDirection"),
-                "relativeHumidity": row.get("relativeHumidity"),
-                "windSpeedGust": row.get("windSpeedGust"),
             }
+            for column in df.columns:
+                data_point[column] = row.get(column)
             timeseries.append(data_point)
 
         return {"station_id": station_id, "date": date, "timeseries": timeseries}
@@ -111,12 +130,9 @@ def load_timeseries_data_range(
                 for index, row in df.iterrows():
                     data_point = {
                         "timestamp": index.to_pydatetime(),
-                        "airTemperature": row.get("airTemperature"),
-                        "windSpeed": row.get("windSpeed"),
-                        "windDirection": row.get("windDirection"),
-                        "relativeHumidity": row.get("relativeHumidity"),
-                        "windSpeedGust": row.get("windSpeedGust"),
                     }
+                    for column in df.columns:
+                        data_point[column] = row.get(column)
                     all_timeseries.append(data_point)
             except FileNotFoundError:
                 continue  # Skip missing files
@@ -145,37 +161,22 @@ def load_timeseries_data_range(
         )
 
 
-def get_available_variables() -> List[str]:
-    """Get list of available variables in timeseries data"""
-    # These are the standard variables we expect in the parquet files
-    return [
-        "airTemperature",
-        "windSpeed",
-        "windDirection",
-        "relativeHumidity",
-        "windSpeedGust",
-    ]
-
-
-def get_station_date_ranges() -> Dict[str, Dict[str, Any]]:
-    """Get date ranges for all stations with timeseries data"""
-    stations = get_available_stations()
-    date_ranges = {}
-
-    for station_id in stations:
-        dates = get_available_dates_for_station(station_id)
-        if dates:
-            date_ranges[station_id] = {
-                "min_date": min(dates),
-                "max_date": max(dates),
-                "available_dates": dates,
-            }
-
-    return date_ranges
+def check_station_exists(station_id: str) -> bool:
+    """Check if station exists in stations status data"""
+    try:
+        with open(STATIONS_STATUS_PATH, "r") as file:
+            stations_data = json.load(file)
+            return station_id in stations_data
+    except FileNotFoundError:
+        return False
+    except json.JSONDecodeError:
+        return False
+    except Exception:
+        return False
 
 
 @router.get(
-    "/stations",
+    "/available",
     response_model=List[str],
     responses={
         404: {"description": "Long timeseries data directory not found"},
@@ -197,110 +198,7 @@ async def get_timeseries_stations():
 
 
 @router.get(
-    "/stations/{station_id}/dates",
-    response_model=List[str],
-    responses={
-        404: {"description": "Station not found or no dates available"},
-        500: {"description": "Error reading dates"},
-    },
-)
-async def get_station_timeseries_dates(station_id: str):
-    """
-    Get available dates for a specific station's timeseries data
-    """
-    dates = get_available_dates_for_station(station_id)
-
-    if not dates:
-        raise HTTPException(
-            status_code=404, detail="No timeseries data available for this station"
-        )
-
-    return dates
-
-
-@router.get(
-    "/stations/{station_id}/{date}",
-    response_model=StationTimeseries,
-    responses={
-        404: {"description": "Station or date not found"},
-        500: {"description": "Error reading timeseries data"},
-    },
-)
-async def get_station_timeseries_data(station_id: str, date: str):
-    """
-    Get timeseries data for a specific station and date
-    """
-    data = load_timeseries_data(station_id, date)
-
-    # Convert to StationTimeseries model
-    timeseries_data_points = []
-    for point in data["timeseries"]:
-        # Filter out None values to avoid validation issues
-        filtered_data = {
-            k: v for k, v in point.items() if v is not None and k != "timestamp"
-        }
-        data_point = StationTimeseriesDataPoint(
-            timestamp=point["timestamp"], **filtered_data
-        )
-        timeseries_data_points.append(data_point)
-
-    return StationTimeseries(station_id=station_id, timeseries=timeseries_data_points)
-
-
-@router.get(
-    "/stations/{station_id}",
-    response_model=StationTimeseries,
-    responses={
-        400: {"description": "Invalid date range or too many timesteps requested"},
-        404: {"description": "Station or date range not found"},
-        500: {"description": "Error reading timeseries data"},
-    },
-)
-async def get_station_timeseries_data_range(
-    station_id: str,
-    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
-    end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
-):
-    """
-    Get timeseries data for a specific station and date range
-    """
-    data = load_timeseries_data_range(station_id, start_date, end_date)
-
-    # Convert to StationTimeseries model
-    timeseries_data_points = []
-    for point in data["timeseries"]:
-        # Filter out None values to avoid validation issues
-        filtered_data = {
-            k: v for k, v in point.items() if v is not None and k != "timestamp"
-        }
-        data_point = StationTimeseriesDataPoint(
-            timestamp=point["timestamp"], **filtered_data
-        )
-        timeseries_data_points.append(data_point)
-
-    return StationTimeseries(station_id=station_id, timeseries=timeseries_data_points)
-
-
-# Define path for stations status data
-STATIONS_STATUS_PATH = "./data/000_stations_status/all_dict.json"
-
-
-def check_station_exists(station_id: str) -> bool:
-    """Check if station exists in stations status data"""
-    try:
-        with open(STATIONS_STATUS_PATH, "r") as file:
-            stations_data = json.load(file)
-            return station_id in stations_data
-    except FileNotFoundError:
-        return False
-    except json.JSONDecodeError:
-        return False
-    except Exception:
-        return False
-
-
-@router.get(
-    "/stations/{station_id}/variables",
+    "/{station_id}/variables",
     response_model=List[str],
     responses={
         404: {"description": "Station not found"},
@@ -316,7 +214,13 @@ async def get_station_timeseries_variables(station_id: str):
         if not check_station_exists(station_id):
             raise HTTPException(status_code=404, detail="Station not found")
 
-        variables = get_available_variables()
+        # Get available variables from a sample file
+        variables = get_available_variables_from_sample(station_id)
+        if not variables:
+            raise HTTPException(
+                status_code=404, detail="No variables found in timeseries data"
+            )
+
         return variables
     except Exception as e:
         raise HTTPException(
@@ -325,7 +229,7 @@ async def get_station_timeseries_variables(station_id: str):
 
 
 @router.get(
-    "/stations/{station_id}/date-range",
+    "/{station_id}/date-range",
     response_model=Dict[str, Any],
     responses={
         404: {"description": "Station not found or no timeseries data available"},
@@ -357,3 +261,37 @@ async def get_station_timeseries_date_range(station_id: str):
         raise HTTPException(
             status_code=500, detail=f"Error getting date range: {str(e)}"
         )
+
+
+@router.get(
+    "/{station_id}",
+    response_model=StationTimeseries,
+    responses={
+        400: {"description": "Invalid date range or too many timesteps requested"},
+        404: {"description": "Station or date range not found"},
+        500: {"description": "Error reading timeseries data"},
+    },
+)
+async def get_station_timeseries_data_range(
+    station_id: str,
+    start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),
+    end_date: str = Query(..., description="End date in YYYY-MM-DD format"),
+):
+    """
+    Get timeseries data for a specific station and date range
+    """
+    data = load_timeseries_data_range(station_id, start_date, end_date)
+
+    # Convert to StationTimeseries model
+    timeseries_data_points = []
+    for point in data["timeseries"]:
+        # Filter out None values to avoid validation issues
+        filtered_data = {
+            k: v for k, v in point.items() if v is not None and k != "timestamp"
+        }
+        data_point = StationTimeseriesDataPoint(
+            timestamp=point["timestamp"], **filtered_data
+        )
+        timeseries_data_points.append(data_point)
+
+    return StationTimeseries(station_id=station_id, timeseries=timeseries_data_points)
