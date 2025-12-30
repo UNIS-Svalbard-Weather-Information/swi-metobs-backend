@@ -1,14 +1,19 @@
 from fastapi import APIRouter, HTTPException
 from typing import List, Dict, Any
-from app.models.stations_data import StationTimeseries
+from app.models.stations_data import StationTimeseries, StationIDModel
+from app.utils.error import handle_validation_error
 import os
 import json
+from loguru import logger
+
 
 router = APIRouter()
 
 # Define paths as variables
 LATEST_DATA_PATH = "./data/000_latest_obs/latest_dict.json"
 HOURLY_DATA_PATH = "./data/000_hourly_data/{offset}.json"
+MIN_TIME_OFFSET = -24
+MAX_TIME_OFFSET = 24
 
 # Environment variable to enable forecast data
 enable_forecast = (
@@ -41,10 +46,12 @@ async def get_station_observations(station_id: str, offset: int = 0):
     Get data for a specific station with optional time offset.
     - offset: 0 for latest data, negative for past data, positive for forecast data.
     """
+    handle_validation_error(StationIDModel, id=station_id)
+
     # Validate the offset
-    if offset < -24 or offset > 24:
+    if offset < MIN_TIME_OFFSET or offset > MAX_TIME_OFFSET:
         raise HTTPException(
-            status_code=400, detail="Offset out of range. Must be between -24 and 24."
+            status_code=400, detail=f"Offset out of range. Must be between {MIN_TIME_OFFSET} and {MIN_TIME_OFFSET if enable_forecast else 0}."
         )
 
     # Determine if we are asking for forecast data
@@ -69,7 +76,7 @@ async def get_station_observations(station_id: str, offset: int = 0):
 
     # Create the response model
     return StationTimeseries(
-        station_id=station_id, timeseries=station_data.get("timeseries", [])
+        id=station_id, timeseries=station_data.get("timeseries", [])
     )
 
 
@@ -111,7 +118,7 @@ async def get_all_stations_observations(offset: int = 0):
     for station_id, station_data in data.items():
         stations.append(
             StationTimeseries(
-                station_id=station_id, timeseries=station_data.get("timeseries", [])
+                id=station_id, timeseries=station_data.get("timeseries", [])
             )
         )
 

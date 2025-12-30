@@ -1,7 +1,8 @@
 from fastapi import HTTPException, APIRouter
 import json
 from pathlib import Path
-from app.models.stations_data import StationMetadata, StationId
+from app.models.stations_data import StationMetadata, StationIDModel
+from app.utils.error import handle_validation_error
 
 # Get the router from parent
 router = APIRouter()
@@ -72,6 +73,9 @@ async def get_all_stations():
 @router.get("/{station_id}", response_model=StationMetadata)
 async def get_station(station_id: str):
     """Get information for a specific station"""
+
+    handle_validation_error(StationIDModel, id=station_id)
+
     try:
         with open(STATIONS_FILE) as f:
             stations = json.load(f)

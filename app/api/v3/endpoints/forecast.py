@@ -3,7 +3,10 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Literal
 from pathlib import Path
 import os
-from app.models.forecast import ForecastResponse
+from app.models.forecast import ForecastResponse, ForecastRequestModel, ForecastFile
+from app.utils.error import handle_validation_error
+from loguru import logger
+from app.utils.path import safe_join
 
 router = APIRouter()
 
@@ -22,7 +25,7 @@ def get_files_for_variable(
     Returns a list of files (COG or velocity) for the given variable, models, and hour range.
     """
     files = []
-    now = datetime.now(datetime.timezone.utc)
+    now = datetime.utcnow()
 
     # Calculate the time range
     start_time = now + timedelta(hours=start_hour)
@@ -33,7 +36,8 @@ def get_files_for_variable(
         models = [d for d in os.listdir(BASE_DIR) if (BASE_DIR / d).is_dir()]
 
     for model in models:
-        model_dir = BASE_DIR / model / file_type
+        model_dir = safe_join(BASE_DIR, model, file_type, relative=True)
+        # model_dir = BASE_DIR / model / file_type
         if not model_dir.exists():
             continue
 
@@ -48,11 +52,11 @@ def get_files_for_variable(
                     continue
                 if start_time <= timestamp <= end_time:
                     files.append(
-                        {
-                            "model": model,
-                            "file_path": str(model_dir / filename),
-                            "timestamp": timestamp_str,
-                        }
+                        ForecastFile(
+                            model=model,
+                            file_path=model_dir / filename,
+                            timestamp=timestamp_str,
+                        )
                     )
             elif (
                 file_type == "velocity"
@@ -68,11 +72,11 @@ def get_files_for_variable(
                     continue
                 if start_time <= timestamp <= end_time:
                     files.append(
-                        {
-                            "model": model,
-                            "file_path": str(filename),
-                            "timestamp": timestamp_str,
-                        }
+                        ForecastFile(
+                            model=model,
+                            file_path=filename,
+                            timestamp=timestamp_str,
+                        )
                     )
 
     return files
@@ -97,6 +101,16 @@ async def get_available_forecast(
     """
     Endpoint to get forecast files (COG or velocity) for a specific variable, model, and hour range.
     """
+    # Validate input using your Pydantic model
+    handle_validation_error(
+        ForecastRequestModel,
+        variable=variable,
+        models=model,
+        file_type=file_type,
+        start_hour=start_hour,
+        end_hour=end_hour,
+    )
+
     if not BASE_DIR.exists():
         raise HTTPException(status_code=404, detail="Forecast not available")
 
@@ -131,7 +145,7 @@ async def get_leaflet_velocity_file(
             detail="Client must accept gzip encoding. Send 'Accept-Encoding: gzip' header.",
         )
 
-    file_path = BASE_DIR / model / "velocity" / filename
+    file_path = safe_join(BASE_DIR, model, "velocity", filename)
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Velocity file not found")
 

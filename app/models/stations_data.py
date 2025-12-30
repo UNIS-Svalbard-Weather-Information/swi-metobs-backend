@@ -1,11 +1,17 @@
 from pydantic import BaseModel, field_validator
 from typing import List, Literal, Optional
 from datetime import datetime
+import re
 
 
-class StationId(BaseModel):
+class StationIDModel(BaseModel):
     id: str
 
+    @field_validator('id')
+    def validate_id(cls, v: str) -> str:
+        if not re.match(r'^[a-zA-Z0-9_-]+$', v):
+            raise ValueError('Invalid station ID format. Only letters, numbers, underscores, and hyphens are allowed.')
+        return v
 
 class StationPosition(BaseModel):
     lat: Optional[float] = None
@@ -44,8 +50,8 @@ class StationPosition(BaseModel):
         return super().model_validate(data)
 
 
-class StationMetadata(BaseModel):
-    id: str
+class StationMetadata(StationIDModel):
+    # id: str
     name: str
     type: Literal["fixed", "mobile"]
     location: StationPosition
@@ -63,12 +69,50 @@ class StationTimeseriesDataPoint(BaseModel):
         extra = "allow"  # Allow any additional fields
 
 
-class StationTimeseries(BaseModel):
-    station_id: str
+class StationTimeseries(StationIDModel):
+    # station_id: str
     timeseries: List[StationTimeseriesDataPoint]
 
-class StationsAvailableHistoricalDates(BaseModel):
-    station_id: str
+class StationsAvailableHistoricalDates(StationIDModel):
+    # station_id: str
     min_date: str
     max_date: str
     available_dates: List[str]
+
+class DateRangeModel(BaseModel):
+    start_date: str
+    end_date: str
+
+    @field_validator('start_date', 'end_date')
+    def validate_iso_date(cls, v: str) -> str:
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError('Invalid date format. Use YYYY-MM-DD.')
+        return v
+
+class StationDataRequestModel(StationIDModel):
+    start_date: str
+    end_date: str
+    variables: Optional[List[str]] = None
+    resample: bool = False
+
+    @field_validator('start_date', 'end_date')
+    def validate_iso_date(cls, v: str) -> str:
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError('Invalid date format. Use YYYY-MM-DD.')
+        return v
+    
+    @field_validator('variables', mode='before')
+    def validate_variable_names(cls, v: Optional[List[str]]) -> Optional[List[str]]:
+        if v is None:
+            return v
+        pattern = re.compile(r'^[a-zA-Z0-9_-]+$')
+        for var in v:
+            if not pattern.match(var):
+                raise ValueError(
+                    f"Invalid variable name: '{var}'. Only letters, numbers, '_', and '-' are allowed."
+                )
+        return v
