@@ -10,7 +10,7 @@ A backend service for meteorological observations, serving as the public data AP
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.8+ (use python 3.13 for Production)
 - Docker (optional, for containerized deployment)
 
 ### Steps
