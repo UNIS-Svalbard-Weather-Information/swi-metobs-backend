@@ -34,5 +34,5 @@ EXPOSE 8085
 
 # Run the app
 
-ENV API_ROOT_PATH="/public/"
+ENV API_ROOT_PATH="/public"
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port 8085 --workers 4 --root-path $API_ROOT_PATH"]
