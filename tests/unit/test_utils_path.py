@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 from fastapi import HTTPException
+import os
 
 from app.utils.path import safe_join
 
@@ -20,7 +21,10 @@ def test_safe_join_absolute_path(tmp_path):
 
 
 def test_safe_join_relative_path(tmp_path):
-    base = tmp_path
+    backup_path = Path.cwd()
+    os.chdir(tmp_path)
+    base = Path("base_dir")
+    base.mkdir()
     subdir = "subdir"
     file = "file.txt"
 
@@ -29,7 +33,9 @@ def test_safe_join_relative_path(tmp_path):
 
     # Test with relative=True
     result = safe_join(base, subdir, file, relative=True)
-    assert result == Path(subdir) / file
+    expected = Path(base / subdir) / file
+    assert result == expected
+    os.chdir(backup_path)
 
 
 def test_safe_join_path_traversal_attempt(tmp_path):
@@ -67,7 +73,11 @@ def test_safe_join_nested_subdirectories(tmp_path):
 
 
 def test_safe_join_relative_nested(tmp_path):
-    base = tmp_path
+    backup_path = Path.cwd()
+    os.chdir(tmp_path)
+    base = Path("base_dir")
+    base.mkdir()
+
     nested = Path("a/b/c")
     file = "file.txt"
 
@@ -76,7 +86,8 @@ def test_safe_join_relative_nested(tmp_path):
 
     # Test with relative=True and nested subdirectories
     result = safe_join(base, "a", "b", "c", file, relative=True)
-    assert result == Path("a/b/c/file.txt")
+    assert result == Path(base / "a/b/c/file.txt")
+    os.chdir(backup_path)
 
 
 def test_safe_join_empty_paths(tmp_path):
@@ -88,11 +99,14 @@ def test_safe_join_empty_paths(tmp_path):
 
 
 def test_safe_join_relative_empty_paths(tmp_path):
-    base = tmp_path
+    backup_path = Path.cwd()
+    os.chdir(tmp_path)
+    base = Path(".")
 
     # Test with no additional paths and relative=True
     result = safe_join(base, relative=True)
     assert result == Path(".")
+    os.chdir(backup_path)
 
 
 def test_safe_join_symlink_traversal_outside_base(tmp_path):
