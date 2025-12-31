@@ -25,4 +25,4 @@ def safe_join(base: Path, *paths, relative: bool = False) -> Path:
         logger.error(f"Invalid Path: {full_path}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-    return full_path.relative_to(base) if relative else full_path
+    return full_path.relative_to(Path.cwd()) if relative else full_path
