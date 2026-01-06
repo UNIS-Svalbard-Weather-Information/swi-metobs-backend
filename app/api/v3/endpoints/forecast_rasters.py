@@ -54,7 +54,7 @@ def get_files_for_variable(
                     files.append(
                         ForecastFile(
                             model=model,
-                            file_path=model_dir / filename,
+                            file_path=str(model_dir / filename),
                             timestamp=timestamp_str,
                         )
                     )
@@ -74,7 +74,7 @@ def get_files_for_variable(
                     files.append(
                         ForecastFile(
                             model=model,
-                            file_path=filename,
+                            file_path=str(filename),
                             timestamp=timestamp_str,
                         )
                     )
