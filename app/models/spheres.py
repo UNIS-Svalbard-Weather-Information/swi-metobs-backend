@@ -28,8 +28,8 @@ class SphereNodePanorama(SphereNode):
 
     @field_validator("panorama", "thumbnail")
     def validate_image_url(cls, value: HttpUrl) -> HttpUrl:
-        valid_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-        if not any(value.lower().endswith(ext) for ext in valid_extensions):
+        valid_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".thumbnail"}
+        if not any(str(value).lower().endswith(ext) for ext in valid_extensions):
             raise ValueError(
                 f"URL must point to an image file with a valid extension: {valid_extensions}"
             )
