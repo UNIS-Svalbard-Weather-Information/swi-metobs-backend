@@ -4,7 +4,14 @@ Unit tests for sphere models.
 
 import pytest
 from datetime import datetime
-from app.models.spheres import SphereNode, SphereNodePanorama, SphereGeojson, Geometry, Properties, Feature
+from app.models.spheres import (
+    SphereNode,
+    SphereNodePanorama,
+    SphereGeojson,
+    Geometry,
+    Properties,
+    Feature,
+)
 from pydantic import ValidationError
 
 
@@ -36,7 +43,9 @@ class TestSphereNode:
     def test_invalid_sphere_node_altitude_range(self):
         """Test invalid SphereNode with out-of-range altitude."""
         with pytest.raises(ValidationError):
-            SphereNode(id="invalid_node", gps=[6.8586, 45.8326, 15000.0])  # Altitude >= 10000
+            SphereNode(
+                id="invalid_node", gps=[6.8586, 45.8326, 15000.0]
+            )  # Altitude >= 10000
 
     def test_invalid_sphere_node_too_few_coordinates(self):
         """Test invalid SphereNode with insufficient coordinates."""
@@ -46,7 +55,9 @@ class TestSphereNode:
     def test_invalid_sphere_node_too_many_coordinates(self):
         """Test invalid SphereNode with too many coordinates."""
         with pytest.raises(ValidationError):
-            SphereNode(id="invalid_node", gps=[6.8586, 45.8326, 100.0, 50.0])  # 4 coordinates
+            SphereNode(
+                id="invalid_node", gps=[6.8586, 45.8326, 100.0, 50.0]
+            )  # 4 coordinates
 
 
 class TestSphereNodePanorama:
@@ -63,7 +74,7 @@ class TestSphereNodePanorama:
             author="Test Author",
             date=datetime(2023, 1, 1, 12, 0, 0),
             project="Test Project",
-            label="Test Label"
+            label="Test Label",
         )
         assert node.id == "panorama_node"
         assert node.gps == [6.8586, 45.8326]
@@ -81,7 +92,7 @@ class TestSphereNodePanorama:
                 gps=[6.8586, 45.8326],
                 panorama="https://example.com/file.pdf",  # Invalid extension
                 thumbnail="https://example.com/thumbnail.jpg",
-                links=[]
+                links=[],
             )
 
     def test_invalid_thumbnail_url_extension(self):
@@ -92,20 +103,20 @@ class TestSphereNodePanorama:
                 gps=[6.8586, 45.8326],
                 panorama="https://example.com/panorama.jpg",
                 thumbnail="https://example.com/file.doc",  # Invalid extension
-                links=[]
+                links=[],
             )
 
     def test_valid_url_extensions(self):
         """Test valid URL extensions."""
         valid_extensions = [".jpg", ".jpeg", ".png", ".gif", ".webp", ".thumbnail"]
-        
+
         for ext in valid_extensions:
             node = SphereNodePanorama(
                 id=f"node_{ext}",
                 gps=[6.8586, 45.8326],
                 panorama=f"https://example.com/panorama{ext}",
                 thumbnail=f"https://example.com/thumbnail{ext}",
-                links=[]
+                links=[],
             )
             assert node.id == f"node_{ext}"
 
@@ -128,7 +139,7 @@ class TestSphereGeojson:
             author="Test Author",
             date=datetime(2023, 1, 1),
             project="Test Project",
-            label="Test Label"
+            label="Test Label",
         )
         assert props.id == "test_node"
         assert str(props.panorama) == "https://example.com/panorama.jpg"
@@ -153,7 +164,7 @@ class TestSphereGeojson:
                 author="Author1",
                 date=datetime(2023, 1, 1),
                 project="Project1",
-                label="Label1"
+                label="Label1",
             ),
             SphereNodePanorama(
                 id="node2",
@@ -164,10 +175,10 @@ class TestSphereGeojson:
                 author="Author2",
                 date=datetime(2023, 1, 2),
                 project="Project2",
-                label="Label2"
-            )
+                label="Label2",
+            ),
         ]
-        
+
         geojson = SphereGeojson.from_sphere_nodes(nodes)
         assert geojson.type == "FeatureCollection"
         assert len(geojson.features) == 2
