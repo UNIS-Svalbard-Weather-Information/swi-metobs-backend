@@ -2,7 +2,6 @@
 Unit tests for sphere utility functions.
 """
 
-import pytest
 import math
 from app.api.v3.endpoints.spheres import SpatialIndex
 from app.models.spheres import SphereNodePanorama, SphereNode
