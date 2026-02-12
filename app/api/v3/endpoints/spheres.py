@@ -1,13 +1,9 @@
 from fastapi import HTTPException, APIRouter
-import json
-from pathlib import Path
 from app.models.spheres import SphereGeojson, SphereNodePanorama, SphereNode
-from app.utils.error import handle_validation_error
 import os
 import httpx
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 from datetime import datetime, timedelta
-import logging
 import math
 from collections import defaultdict
 from loguru import logger
@@ -113,7 +109,7 @@ class SpatialIndex:
         global _distance_matrix, _bearing_matrix
 
         node_ids = list(_spatial_index.keys())
-        n = len(node_ids)
+        # n = len(node_ids)
 
         # Initialize matrices
         _distance_matrix = {node_id: {} for node_id in node_ids}
