@@ -37,6 +37,17 @@ A backend service for meteorological observations, serving as the public data AP
 
 **Note**: This project requires Python 3.13.
 
+## Configuration
+
+The spheres functionality can be configured using environment variables:
+
+**Sphere Data Sources:**
+- `SPHERE_LIP_GEOJSON_FETCH`: URL for The Living Ice Project GeoJSON data (default: `https://livingiceproject.com/static/shapes/spheres.geojson`)
+- `SPHERE_LIP_BASE_URL`: Base URL for The Living Ice Project assets (default: `https://livingiceproject.com/`)
+
+**Caching:**
+- The system automatically caches GeoJSON data and computed distance/bearing matrices for 1 hour
+
 ## Usage
 
 ### API Endpoints
@@ -46,6 +57,7 @@ The API provides the following endpoints:
 - `/api/v3/stations`: Retrieve station information.
 - `/api/v3/forecast`: Retrieve forecast data.
 - `/api/v3/observations`: Retrieve observational data.
+- `/api/v3/spheres`: Access spherical panorama data and navigation.
 
 ### Example Request
 
