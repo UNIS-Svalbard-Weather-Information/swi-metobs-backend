@@ -3,7 +3,6 @@ from loguru import logger
 import uuid
 from pydantic import BaseModel
 from typing import Type, Any
-import numpy as np
 
 
 def handle_validation_error(model: Type[BaseModel], **kwargs: Any) -> None:
