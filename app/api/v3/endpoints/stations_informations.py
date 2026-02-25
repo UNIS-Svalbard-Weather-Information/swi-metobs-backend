@@ -1,8 +1,10 @@
 from fastapi import HTTPException, APIRouter
 import json
 from pathlib import Path
-from app.models.stations import StationMetadata, StationIDModel
-from app.utils.error import handle_validation_error
+from app.models.stations import StationMetadata, StationIDModel, SearchAnswer
+from app.utils.error import handle_validation_error, handle_processing_error
+from loguru import logger
+from fuzzywuzzy import fuzz, process
 
 # Get the router from parent
 router = APIRouter()
@@ -67,6 +69,52 @@ async def get_all_stations():
         raise HTTPException(
             status_code=500,
             detail="An unexpected error occurred while processing your request.",
+        )
+
+
+@router.get("/search", response_model=SearchAnswer)
+async def search_station(q: str, limit: int = 10):
+    """Search for a weather station by name using fuzzy matching."""
+    try:
+        with open(STATIONS_FILE) as f:
+            stations = json.load(f)
+
+        # Extract station names and their full info
+        station_names = list(stations.values())
+        names = [station["name"] for station in station_names]
+
+        # Perform fuzzy search
+        matches = process.extract(q, names, limit=limit, scorer=fuzz.WRatio)
+
+        print(matches)
+
+        # Prepare the result
+        results = []
+        for name, score in matches:
+            for station in station_names:
+                if station["name"] == name:
+                    results.append(station)
+                    break
+
+        return {"items": results}
+
+    except FileNotFoundError as e:
+        handle_processing_error(
+            e,
+            status_code=500,
+            details="The service is temporarily unavailable. Please try again later.",
+        )
+    except json.JSONDecodeError as e:
+        handle_processing_error(
+            e,
+            status_code=500,
+            details="An unexpected error occurred while processing your request.",
+        )
+    except Exception as e:
+        handle_processing_error(
+            e,
+            status_code=500,
+            details="An unexpected error occurred while processing your request.",
         )
 
 

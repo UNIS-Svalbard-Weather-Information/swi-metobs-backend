@@ -17,3 +17,17 @@ def handle_validation_error(model: Type[BaseModel], **kwargs: Any) -> None:
                 uid
             ),
         )
+
+
+def handle_processing_error(e, status_code=500, details="An error occured"):
+    uid = uuid.uuid4()
+    logger.error(
+        "An error occured: {}, - Error UUID : {} - {}-{}".format(
+            e, uid, status_code, details
+        )
+    )
+
+    HTTPException(
+        status_code=status_code,
+        detail="{} ({})".format(details, uid),
+    )

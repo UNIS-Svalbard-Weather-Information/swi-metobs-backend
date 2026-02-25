@@ -122,3 +122,7 @@ class StationDataRequestModel(StationIDModel):
                     f"Invalid variable name: '{var}'. Only letters, numbers, '_', and '-' are allowed."
                 )
         return v
+
+
+class SearchAnswer(BaseModel):
+    items: List[StationMetadata] = []
