@@ -3,7 +3,6 @@ import json
 from pathlib import Path
 from app.models.stations import StationMetadata, StationIDModel, SearchAnswer
 from app.utils.error import handle_validation_error, handle_processing_error
-from loguru import logger
 from fuzzywuzzy import fuzz, process
 
 # Get the router from parent
