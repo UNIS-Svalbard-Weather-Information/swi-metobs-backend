@@ -87,13 +87,15 @@ async def search_station(q: str, limit: int = 10):
 
         print(matches)
 
-        # Prepare the result
+        # Prepare the result with score threshold
         results = []
         for name, score in matches:
-            for station in station_names:
-                if station["name"] == name:
-                    results.append(station)
-                    break
+            # Only include matches with reasonable confidence (score >= 50)
+            if score >= 50:
+                for station in station_names:
+                    if station["name"] == name:
+                        results.append(station)
+                        break
 
         return {"items": results}
 

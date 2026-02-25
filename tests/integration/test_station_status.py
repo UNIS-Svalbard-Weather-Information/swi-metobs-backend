@@ -62,3 +62,40 @@ class TestStationStatusEndpoints:
         assert response.status_code == 400  # Bad Request (custom error handling)
         data = response.json()
         assert "detail" in data
+
+    async def test_search_stations(self, client):
+        """Test searching for stations by name."""
+        response = client.get("/v3/station-status/search?q=Test")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) > 0
+        # Check that the result contains the test station
+        assert any(station["id"] == "TEST001" for station in data["items"])
+
+    async def test_search_stations_limit(self, client):
+        """Test searching for stations with limit parameter."""
+        response = client.get("/v3/station-status/search?q=Test&limit=5")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) <= 5
+
+    async def test_search_stations_no_results(self, client):
+        """Test searching for stations with no results."""
+        response = client.get("/v3/station-status/search?q=xyzabc123notfound")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
+        assert len(data["items"]) == 0
+
+    async def test_search_stations_empty_query(self, client):
+        """Test searching for stations with empty query."""
+        response = client.get("/v3/station-status/search?q=")
+        assert response.status_code == 200
+        data = response.json()
+        assert "items" in data
+        assert isinstance(data["items"], list)
