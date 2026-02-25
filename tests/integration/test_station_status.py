@@ -99,3 +99,52 @@ class TestStationStatusEndpoints:
         data = response.json()
         assert "items" in data
         assert isinstance(data["items"], list)
+
+    async def test_search_stations_missing_file_error(self, client, monkeypatch):
+        """Test search endpoint when stations file is missing."""
+        from pathlib import Path
+
+        # Mock the STATIONS_FILE to a non-existent path
+        monkeypatch.setattr(
+            "app.api.v3.endpoints.stations_informations.STATIONS_FILE",
+            Path("/nonexistent/path/file.json"),
+        )
+
+        # # Mock Path.open to raise FileNotFoundError
+        # mocker.patch("pathlib.Path.open", side_effect=FileNotFoundError("File not found"))
+
+        response = client.get("/v3/station-status/search?q=test")
+        assert response.status_code == 500
+        data = response.json()
+        assert "detail" in data
+        assert "temporarily unavailable" in data["detail"]
+
+    async def test_search_stations_invalid_json_error(self, client, monkeypatch):
+        """Test search endpoint when stations file contains invalid JSON."""
+        # Mock the file opening to return invalid JSON
+        import builtins
+
+        original_open = builtins.open
+
+        class MockFile:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                pass
+
+            def read(self):
+                return "invalid json content {{{"
+
+        def mock_open(file, *args, **kwargs):
+            if "all_dict.json" in file:
+                return MockFile()
+            return original_open(file, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "open", mock_open)
+
+        response = client.get("/v3/station-status/search?q=test")
+        assert response.status_code == 500
+        data = response.json()
+        assert "detail" in data
+        assert "unexpected error" in data["detail"]
