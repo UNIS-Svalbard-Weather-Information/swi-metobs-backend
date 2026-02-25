@@ -85,8 +85,6 @@ async def search_station(q: str, limit: int = 10):
         # Perform fuzzy search
         matches = process.extract(q, names, limit=limit, scorer=fuzz.WRatio)
 
-        print(matches)
-
         # Prepare the result with score threshold
         results = []
         for name, score in matches:
