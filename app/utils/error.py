@@ -27,7 +27,7 @@ def handle_processing_error(e, status_code=500, details="An error occured"):
         )
     )
 
-    HTTPException(
+    raise HTTPException(
         status_code=status_code,
         detail="{} ({})".format(details, uid),
     )
