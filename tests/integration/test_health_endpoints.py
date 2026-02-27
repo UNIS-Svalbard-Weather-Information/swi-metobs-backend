@@ -121,3 +121,63 @@ class TestHealthEndpoints:
         data = response.json()
         # Should either be healthy or degraded, not error
         assert data["status"] in ["healthy", "degraded"]
+
+        # If there are unhealthy paths, verify they have proper error information
+        if data["status"] == "degraded":
+            unhealthy_paths = [
+                info
+                for info in data["data_paths"].values()
+                if info["status"] == "unhealthy"
+            ]
+            for unhealthy_path in unhealthy_paths:
+                assert "error" in unhealthy_path
+                assert unhealthy_path["error"] in [
+                    "File not found",
+                    "Directory not found or inaccessible",
+                    "Invalid JSON",
+                ]
+
+    async def test_health_endpoint_error_handling(self, client):
+        """Test that health endpoint properly handles various error conditions."""
+        response = client.get("/health")
+        assert response.status_code == 200
+
+        data = response.json()
+
+        # Check that any unhealthy paths have appropriate error messages
+        for path_name, path_info in data["data_paths"].items():
+            if path_info["status"] == "unhealthy":
+                error = path_info.get("error", "")
+
+                # Verify error messages match expected patterns
+                expected_errors = [
+                    "File not found",
+                    "Directory not found or inaccessible",
+                    "Invalid JSON",
+                ]
+
+                # Check if error matches any expected pattern
+                matches_expected = any(
+                    expected in error for expected in expected_errors
+                )
+                assert matches_expected, f"Unexpected error message: {error}"
+
+    async def test_readiness_endpoint_error_response_structure(self, client):
+        """Test that readiness endpoint returns proper error structure when not ready."""
+        response = client.get("/ready")
+
+        if response.status_code == 503:
+            # If service is not ready, verify error structure
+            error_data = response.json()
+            assert "detail" in error_data
+            assert isinstance(error_data["detail"], dict)
+            assert error_data["detail"]["status"] == "not_ready"
+            assert "missing_paths" in error_data["detail"]
+            assert isinstance(error_data["detail"]["missing_paths"], list)
+
+            # Verify all missing paths are actually in our critical paths
+            missing_paths = error_data["detail"]["missing_paths"]
+            for path_name in missing_paths:
+                assert path_name in CRITICAL_PATHS, (
+                    f"Missing path {path_name} not in critical paths"
+                )
