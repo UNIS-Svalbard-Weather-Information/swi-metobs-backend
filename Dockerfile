@@ -1,4 +1,5 @@
 ARG PYTHON_VERSION=3.13
+ARG API_VERSION=3.X.X
 
 # Stage 1: Dependency resolution
 FROM astral/uv:python${PYTHON_VERSION}-bookworm-slim AS uv
@@ -14,6 +15,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Stage 3: Runtime
 FROM python:${PYTHON_VERSION}-slim
+ARG API_VERSION
+ARG PYTHON_VERSION
 WORKDIR /swi
 
 # Copy only necessary files from the builder stage
@@ -22,6 +25,7 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 # Copy application code
 COPY . .
+RUN echo "VERSION = '${API_VERSION}'" > ./app/version.py
 
 # Environment variables
 ENV PORT=8085
@@ -36,4 +40,4 @@ ENV API_ROOT_PATH="/public"
 EXPOSE $PORT
 
 # Run the app
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "${PORT}", "--workers", "${WORKERS}", "--root-path", "${API_ROOT_PATH}"]
+CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --root-path ${API_ROOT_PATH}

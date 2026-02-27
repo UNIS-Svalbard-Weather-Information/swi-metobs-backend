@@ -87,3 +87,4 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             PYTHON_VERSION=${{ env.PYTHON_VERSION }}
+            API_VERSION=${{ github.ref_name }}
