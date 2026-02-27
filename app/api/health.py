@@ -21,6 +21,7 @@ def check_paths(paths_to_check: list) -> dict:
 
     for name in paths_to_check:
         if name not in HEALTH_CHECK_PATHS:
+            logger.error("Missing file path for {}".format(name))
             continue
 
         path = HEALTH_CHECK_PATHS[name]
