@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 from app.api.v3.router import api_router
+from app.api.health import router as health_router
 from app.version import VERSION
 from fastapi.middleware.cors import CORSMiddleware
 import os
@@ -18,4 +19,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add health endpoints (not versioned)
+app.include_router(health_router)
+
+# Add versioned API endpoints
 app.include_router(api_router, prefix="/v3")
