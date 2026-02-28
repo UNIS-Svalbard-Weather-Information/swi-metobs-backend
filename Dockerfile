@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.13
+ARG PYTHON_VERSION=3.14
 ARG API_VERSION=3.X.X
 
 # Stage 1: Dependency resolution
