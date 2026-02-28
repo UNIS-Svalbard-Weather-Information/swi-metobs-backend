@@ -380,7 +380,7 @@ async def get_sphere_geojson() -> SphereGeojson:
 @cache_response(ttl=360)
 async def get_sphere_panorama_and_links(
     node_id: str, max_range: float = 10000, sectors: int = 5
-) -> SphereNodePanorama:
+):
     """
     Return the detail of one sphere with neighboring nodes within a distance of
     max_range (default 10000m) from the target sphere.
