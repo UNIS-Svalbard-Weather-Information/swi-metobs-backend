@@ -21,8 +21,8 @@ from pathlib import Path
 router = APIRouter()
 
 # Define paths
-LONG_TIMESERIES_PATH = Path("./data/000_long_timeseries")
-STATIONS_STATUS_PATH = Path("./data/000_stations_status/all_dict.json")
+LONG_TIMESERIES_PATH = Path("./data/historical/000_long_timeseries")
+STATIONS_STATUS_PATH = Path("./data/realtime/000_stations_status/all_dict.json")
 
 # Constants
 MAX_TIMESTEPS = 200
