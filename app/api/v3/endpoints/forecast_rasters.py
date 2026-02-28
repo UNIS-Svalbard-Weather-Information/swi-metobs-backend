@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 from app.models.forecast import ForecastResponse, ForecastRequestModel, ForecastFile
 from app.utils.error import handle_validation_error
+from app.utils.cache import cache_response
 from loguru import logger
 from app.utils.path import safe_join
 
@@ -83,6 +84,7 @@ def get_files_for_variable(
 
 
 @router.get("/list/", response_model=ForecastResponse)
+@cache_response(ttl=600)
 async def get_available_forecast(
     variable: str,
     file_type: Literal["cog", "velocity"] = "cog",
