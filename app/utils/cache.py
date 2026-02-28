@@ -1,0 +1,195 @@
+"""
+Cache utility module with Redis/memory fallback and test mode support.
+"""
+
+import os
+import json
+import hashlib
+from typing import Any, Dict, Optional, Union
+from functools import wraps
+from datetime import datetime, timedelta
+import redis
+from fastapi import Request, Response
+from loguru import logger
+
+
+class MemoryCache:
+    """Simple in-memory cache implementation."""
+
+    def __init__(self):
+        self._cache: Dict[str, Dict[str, Any]] = {}
+
+    def get(self, key: str) -> Optional[str]:
+        """Get cached value."""
+        cached = self._cache.get(key)
+        if cached and cached.get("expires_at") > datetime.now():
+            return cached.get("value")
+        return None
+
+    def setex(self, key: str, ttl: int, value: str):
+        """Set cached value with expiration."""
+        expires_at = datetime.now() + timedelta(seconds=ttl)
+        self._cache[key] = {"value": value, "expires_at": expires_at}
+
+    def delete(self, key: str) -> None:
+        """Delete cached value."""
+        self._cache.pop(key, None)
+
+
+def get_cache_backend() -> Optional[Union[redis.Redis, MemoryCache]]:
+    """
+    Initialize cache backend based on environment variables.
+
+    Returns:
+        redis.Redis if Redis is configured, MemoryCache for fallback, None if disabled.
+    """
+    # Check if cache is disabled (test mode)
+    if os.getenv("SWI_METSERVICES_CACHE_DISABLED", "false").lower() == "true":
+        logger.info("Cache disabled (test mode)")
+        return None
+
+    # Try to configure Redis
+    redis_host = os.getenv("SWI_METSERVICES_REDIS_HOST")
+    redis_port = os.getenv("SWI_METSERVICES_REDIS_PORT")
+    redis_pwd = os.getenv("SWI_METSERVICES_REDIS_PWD")
+
+    if redis_host and redis_port:
+        try:
+            port = int(redis_port)
+            redis_client = redis.Redis(
+                host=redis_host,
+                port=port,
+                password=redis_pwd,
+                decode_responses=True,
+                socket_timeout=5,
+            )
+            # Test connection
+            if redis_client.ping():
+                logger.info(f"Using Redis cache at {redis_host}:{redis_port}")
+                return redis_client
+            else:
+                logger.warning("Redis connection failed, falling back to memory cache")
+        except Exception as e:
+            logger.warning(
+                f"Redis initialization failed: {e}, falling back to memory cache"
+            )
+
+    # Fallback to memory cache
+    logger.info("Using in-memory cache fallback")
+    return MemoryCache()
+
+
+def generate_cache_key(request: Request) -> str:
+    """
+    Generate a unique cache key based on request URL and query parameters.
+
+    Args:
+        request: FastAPI Request object
+
+    Returns:
+        str: Cache key
+    """
+    # Create a unique key based on URL and query parameters
+    url_str = str(request.url)
+    cache_key = hashlib.md5(url_str.encode()).hexdigest()
+    return f"cache:{cache_key}"
+
+
+def generate_cache_key_from_args(func, args, kwargs) -> str:
+    """
+    Generate a unique cache key based on function name and arguments.
+
+    Args:
+        func: The function being cached
+        args: Positional arguments
+        kwargs: Keyword arguments
+
+    Returns:
+        str: Cache key
+    """
+    # Create a unique key based on function name and arguments
+    key_parts = [func.__name__]
+
+    # Add positional arguments
+    for arg in args:
+        key_parts.append(str(arg))
+
+    # Add keyword arguments (sorted for consistency)
+    for key, value in sorted(kwargs.items()):
+        key_parts.append(f"{key}={value}")
+
+    # Create hash from all parts
+    key_str = ":".join(key_parts)
+    cache_key = hashlib.md5(key_str.encode()).hexdigest()
+    return f"cache:{cache_key}"
+
+
+def cache_response(ttl: int = 60):
+    """
+    Decorator to cache API responses.
+
+    Args:
+        ttl: Time-to-live in seconds for cached responses
+
+    Returns:
+        Decorator function
+    """
+
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # Get cache backend
+            cache_backend = get_cache_backend()
+
+            # If cache is disabled, execute function normally
+            if cache_backend is None:
+                logger.debug("Cache disabled, executing function normally")
+                return await func(*args, **kwargs)
+
+            # Generate cache key from function arguments
+            cache_key = generate_cache_key_from_args(func, args, kwargs)
+            logger.debug(f"Cache key: {cache_key}")
+
+            # Try to get cached response
+            cached_data = cache_backend.get(cache_key)
+            if cached_data:
+                logger.debug(f"Cache hit for {cache_key}")
+                try:
+                    cached_response = json.loads(cached_data)
+                    return cached_response
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid cached data for {cache_key}")
+                    cache_backend.delete(cache_key)
+
+            # Execute the function if no cache hit
+            logger.debug(f"Cache miss for {cache_key}, executing function")
+            result = await func(*args, **kwargs)
+
+            # Cache successful results
+            try:
+                # Convert result to JSON if it's not already
+                if isinstance(result, Response):
+                    # Handle FastAPI Response objects
+                    response_data = (
+                        result.body
+                        if hasattr(result, "body")
+                        else json.dumps(result.content)
+                    )
+                elif hasattr(result, "dict"):
+                    # Handle Pydantic models
+                    response_data = json.dumps(result.dict())
+                else:
+                    # Handle other types
+                    response_data = json.dumps(result)
+
+                # Store in cache
+                cache_backend.setex(cache_key, ttl, response_data)
+                logger.debug(f"Cached response for {cache_key} (TTL: {ttl}s)")
+            except Exception as e:
+                logger.error(f"Failed to cache response for {cache_key}: {e}")
+
+            return result
+
+        return wrapper
+
+    return decorator

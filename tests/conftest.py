@@ -8,6 +8,16 @@ from datetime import datetime
 import pandas as pd
 
 
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_environment():
+    """Set up test environment variables."""
+    # Disable caching during tests
+    os.environ["SWI_METSERVICES_CACHE_DISABLED"] = "true"
+    yield
+    # Clean up environment variables
+    os.environ.pop("SWI_METSERVICES_CACHE_DISABLED", None)
+
+
 @pytest.fixture(scope="session")
 def test_client():
     """Create a test client for the FastAPI app."""

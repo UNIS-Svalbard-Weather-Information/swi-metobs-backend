@@ -1,5 +1,6 @@
 from fastapi import HTTPException, APIRouter
 from app.models.spheres import SphereGeojson, SphereNodePanorama, SphereNode
+from app.utils.cache import cache_response
 import os
 import httpx
 from typing import Dict, List, Tuple
@@ -358,6 +359,7 @@ async def ensure_data_loaded() -> List[SphereNodePanorama]:
 
 
 @router.get("/geojson", response_model=SphereGeojson)
+@cache_response(ttl=3600)
 async def get_sphere_geojson() -> SphereGeojson:
     """
     Return the GeoJSON of all sphere nodes from all projects to be displayed by Leaflet.
@@ -375,6 +377,7 @@ async def get_sphere_geojson() -> SphereGeojson:
 
 
 @router.get("/{node_id}", response_model=SphereNodePanorama)
+@cache_response(ttl=360)
 async def get_sphere_panorama_and_links(
     node_id: str, max_range: float = 10000, sectors: int = 5
 ) -> SphereNodePanorama:
