@@ -36,14 +36,15 @@ def setup_test_data():
         shutil.move("./data", test_data_backup)
 
     # Create necessary directories
-    os.makedirs("./data/000_long_timeseries", exist_ok=True)
-    os.makedirs("./data/000_stations_status", exist_ok=True)
-    os.makedirs("./data/000_latest_obs", exist_ok=True)
+    os.makedirs("./data/historical/000_long_timeseries", exist_ok=True)
+    os.makedirs("./data/realtime/000_stations_status", exist_ok=True)
+    os.makedirs("./data/realtime/000_latest_obs", exist_ok=True)
+    os.makedirs("./data/realtime/000_hourly_data", exist_ok=True)
     os.makedirs("./data/forecast", exist_ok=True)
 
     # Create test station data
     test_station_id = "TEST001"
-    station_dir = Path(f"./data/000_long_timeseries/{test_station_id}")
+    station_dir = Path(f"./data/historical/000_long_timeseries/{test_station_id}")
     station_dir.mkdir(exist_ok=True)
 
     # Create a simple parquet file for testing
@@ -72,13 +73,13 @@ def setup_test_data():
         }
     }
 
-    with open("./data/000_stations_status/all_dict.json", "w") as f:
+    with open("./data/realtime/000_stations_status/all_dict.json", "w") as f:
         json.dump(stations_data, f)
 
-    with open("./data/000_stations_status/online_dict.json", "w") as f:
+    with open("./data/realtime/000_stations_status/online_dict.json", "w") as f:
         json.dump({test_station_id: stations_data[test_station_id]}, f)
 
-    with open("./data/000_stations_status/offline_dict.json", "w") as f:
+    with open("./data/realtime/000_stations_status/offline_dict.json", "w") as f:
         json.dump({}, f)
 
     # Create latest observations data
@@ -94,7 +95,10 @@ def setup_test_data():
         }
     }
 
-    with open("./data/000_latest_obs/latest_dict.json", "w") as f:
+    with open("./data/realtime/000_latest_obs/latest_dict.json", "w") as f:
+        json.dump(latest_data, f)
+
+    with open("./data/realtime/000_hourly_data/-1.json", "w") as f:
         json.dump(latest_data, f)
 
     # Create forecast directory structure
