@@ -13,6 +13,10 @@ from fastapi import Request, Response
 from loguru import logger
 
 
+# Cache backend instance (module-level cache)
+_cache_backend_instance = None
+
+
 class MemoryCache:
     """Simple in-memory cache implementation."""
 
@@ -22,14 +26,24 @@ class MemoryCache:
     def get(self, key: str) -> Optional[str]:
         """Get cached value."""
         cached = self._cache.get(key)
-        if cached and cached.get("expires_at") > datetime.now():
-            return cached.get("value")
+        if cached:
+            logger.debug(
+                f"MemoryCache.get({key}): found cached item, expires_at={cached.get('expires_at')}, now={datetime.now()}"
+            )
+            if cached.get("expires_at") > datetime.now():
+                logger.debug(f"MemoryCache.get({key}): returning cached value")
+                return cached.get("value")
+            else:
+                logger.debug(f"MemoryCache.get({key}): cached item expired")
+        else:
+            logger.debug(f"MemoryCache.get({key}): no cached item found")
         return None
 
     def setex(self, key: str, ttl: int, value: str):
         """Set cached value with expiration."""
         expires_at = datetime.now() + timedelta(seconds=ttl)
         self._cache[key] = {"value": value, "expires_at": expires_at}
+        logger.debug(f"MemoryCache.setex({key}): stored value, expires_at={expires_at}")
 
     def delete(self, key: str) -> None:
         """Delete cached value."""
@@ -43,9 +57,28 @@ def get_cache_backend() -> Optional[Union[redis.Redis, MemoryCache]]:
     Returns:
         redis.Redis if Redis is configured, MemoryCache for fallback, None if disabled.
     """
+    global _cache_backend_instance
+
+    # Return cached instance if available and cache is not disabled
+    # But allow re-evaluation if Redis is configured (for testing)
+    current_cache_disabled = (
+        os.getenv("SWI_METSERVICES_CACHE_DISABLED", "false").lower() == "true"
+    )
+    redis_configured = os.getenv("SWI_METSERVICES_REDIS_HOST") and os.getenv(
+        "SWI_METSERVICES_REDIS_PORT"
+    )
+
+    if (
+        _cache_backend_instance is not None
+        and not current_cache_disabled
+        and not redis_configured
+    ):
+        return _cache_backend_instance
+
     # Check if cache is disabled (test mode)
     if os.getenv("SWI_METSERVICES_CACHE_DISABLED", "false").lower() == "true":
         logger.info("Cache disabled (test mode)")
+        _cache_backend_instance = None
         return None
 
     # Try to configure Redis
@@ -76,7 +109,8 @@ def get_cache_backend() -> Optional[Union[redis.Redis, MemoryCache]]:
 
     # Fallback to memory cache
     logger.info("Using in-memory cache fallback")
-    return MemoryCache()
+    _cache_backend_instance = MemoryCache()
+    return _cache_backend_instance
 
 
 def generate_cache_key(request: Request) -> str:
@@ -176,11 +210,26 @@ def cache_response(ttl: int = 60):
                         else json.dumps(result.content)
                     )
                 elif hasattr(result, "dict"):
-                    # Handle Pydantic models
-                    response_data = json.dumps(result.dict())
+                    # Handle Pydantic models - use model_dump() with mode='json' for proper serialization
+                    try:
+                        # Try to use model_dump() first (Pydantic v2)
+                        if hasattr(result, "model_dump"):
+                            result_dict = result.model_dump(mode="json")
+                        else:
+                            result_dict = result.dict()
+                        response_data = json.dumps(result_dict)
+                    except (TypeError, ValueError) as e:
+                        logger.warning(
+                            f"Failed to serialize Pydantic model directly: {e}, falling back to string"
+                        )
+                        response_data = json.dumps(str(result))
                 else:
-                    # Handle other types
-                    response_data = json.dumps(result)
+                    # Handle other types - try to serialize, fall back to string if needed
+                    try:
+                        response_data = json.dumps(result)
+                    except (TypeError, ValueError):
+                        # Fall back to string representation if JSON serialization fails
+                        response_data = json.dumps(str(result))
 
                 # Store in cache
                 cache_backend.setex(cache_key, ttl, response_data)
