@@ -142,20 +142,26 @@ def generate_cache_key_from_args(func, args, kwargs) -> str:
         str: Cache key
     """
     # Create a unique key based on function name and arguments
-    key_parts = [func.__name__]
+    args_part = []
 
     # Add positional arguments
     for arg in args:
-        key_parts.append(str(arg))
+        args_part.append(str(arg))
+
+    args_part.sort()
+
+    kwargs_part = []
 
     # Add keyword arguments (sorted for consistency)
     for key, value in sorted(kwargs.items()):
-        key_parts.append(f"{key}={value}")
+        if str(key) == "response":
+            continue
+        kwargs_part.append(f"{key}={value}")
 
-    # Create hash from all parts
-    key_str = ":".join(key_parts)
-    cache_key = hashlib.md5(key_str.encode()).hexdigest()
-    return f"cache:{cache_key}"
+    kwargs_part.sort()
+
+    # cache_key = hashlib.md5(key_str.encode()).hexdigest()
+    return f"cache:{func.__name__}:{':'.join(args_part)}:{':'.join(kwargs_part)}"
 
 
 def cache_response(ttl: int = 60):
