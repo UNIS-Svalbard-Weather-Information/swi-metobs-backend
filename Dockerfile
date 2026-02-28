@@ -19,6 +19,12 @@ ARG API_VERSION
 ARG PYTHON_VERSION
 WORKDIR /swi
 
+# Install curl and clean up
+RUN apt-get update && \
+    apt-get install -y curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy only necessary files from the builder stage
 COPY --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
