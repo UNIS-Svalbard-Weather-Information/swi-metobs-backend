@@ -16,6 +16,7 @@ BASE_DIR = Path("./data/forecast")
 
 
 def get_files_for_variable(
+    request: Request,
     variable: str,
     models: Optional[List[str]] = None,
     file_type: Literal["cog", "velocity"] = "cog",
@@ -75,7 +76,14 @@ def get_files_for_variable(
                     files.append(
                         ForecastFile(
                             model=model,
-                            file_path=str(filename),
+                            file_path=str(
+                                request.url_for(
+                                    "get_leaflet_velocity_file",
+                                    model=model,
+                                    filename=filename,
+                                )
+                            ),
+                            # file_path=str(filename),
                             timestamp=timestamp_str,
                         )
                     )
@@ -99,9 +107,10 @@ async def get_available_forecast(
         24, description="End hour offset from now (e.g., 24 for 24 hours ahead)"
     ),
     response: Response = None,  # Add Response parameter for headers
+    request: Request = None,  # Add Request parameter if needed for URL generation
 ):
     """
-    Endpoint to get forecast files (COG or velocity) for a specific variable, model, and hour range.
+    Endpoint to get forecast files (COG or velocity) for a specific variable, model, and hour range. The filepath for velocity files is a URL to the download endpoint and for COG the path to the file to use in Titiler.
     """
     # Validate input using your Pydantic model
     handle_validation_error(
@@ -117,7 +126,9 @@ async def get_available_forecast(
         logger.error("Forecast directory {} not availabale.".format(BASE_DIR))
         raise HTTPException(status_code=404, detail="Forecast not available")
 
-    files = get_files_for_variable(variable, model, file_type, start_hour, end_hour)
+    files = get_files_for_variable(
+        request, variable, model, file_type, start_hour, end_hour
+    )
 
     if not files:
         raise HTTPException(
@@ -128,7 +139,7 @@ async def get_available_forecast(
     # Set Cache-Control header for 10 minutes
     response.headers["Cache-Control"] = "public, max-age=600"
 
-    return files
+    return ForecastResponse(forecast=files)
 
 
 @router.get("/files/velocity/{model}/{filename}")

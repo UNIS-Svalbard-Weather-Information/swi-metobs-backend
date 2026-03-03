@@ -9,7 +9,8 @@ class ForecastFile(BaseModel):
     timestamp: str
 
 
-ForecastResponse = List[ForecastFile]
+class ForecastResponse(BaseModel):
+    forecast: List[ForecastFile]
 
 
 class ForecastRequestModel(BaseModel):

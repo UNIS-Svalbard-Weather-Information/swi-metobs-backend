@@ -8,6 +8,7 @@ import hashlib
 from typing import Any, Dict, Optional, Union
 from functools import wraps
 from datetime import datetime, timedelta
+from pydantic import BaseModel
 import redis
 from fastapi import Request, Response
 from loguru import logger
@@ -205,10 +206,16 @@ def cache_response(ttl: int = 60):
             logger.debug(f"Cache miss for {cache_key}, executing function")
             result = await func(*args, **kwargs)
 
+            # logger.debug(f"Type of result: {type(result)} and content: {result}")
+
             # Cache successful results
             try:
-                # Convert result to JSON if it's not already
-                if isinstance(result, Response):
+                if isinstance(result, BaseModel):
+                    response_data = result.model_dump_json()
+                    logger.debug(
+                        f"Serializing Pydantic model for caching: \n\n\n{response_data}\n\n\n"
+                    )
+                elif isinstance(result, Response):
                     # Handle FastAPI Response objects
                     response_data = (
                         result.body
