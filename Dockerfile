@@ -46,4 +46,4 @@ ENV API_ROOT_PATH="/public"
 EXPOSE $PORT
 
 # Run the app
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --root-path ${API_ROOT_PATH}
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --root-path ${API_ROOT_PATH}"]
