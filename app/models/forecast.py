@@ -9,8 +9,18 @@ class ForecastFile(BaseModel):
     timestamp: str
 
 
+class ForecastVariable(BaseModel):
+    variable: str
+    type: str
+    model: str
+
+
 class ForecastResponse(BaseModel):
     forecast: List[ForecastFile]
+
+
+class AvailableVariablesResponse(BaseModel):
+    variables: List[ForecastVariable]
 
 
 class ForecastRequestModel(BaseModel):

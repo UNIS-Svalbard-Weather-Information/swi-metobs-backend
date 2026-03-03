@@ -3,7 +3,12 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Optional, Literal
 from pathlib import Path
 import os
-from app.models.forecast import ForecastResponse, ForecastRequestModel, ForecastFile
+from app.models.forecast import (
+    ForecastResponse,
+    ForecastRequestModel,
+    ForecastFile,
+    AvailableVariablesResponse,
+)
 from app.utils.error import handle_validation_error
 from app.utils.cache import cache_response
 from loguru import logger
@@ -13,6 +18,63 @@ router = APIRouter()
 
 # Base directory where your forecast files are stored
 BASE_DIR = Path("./data/forecast")
+
+
+def get_available_variables() -> List[Dict[str, str]]:
+    """
+    Returns a list of available variables with their type and model.
+    """
+    variables = []
+
+    # If forecast directory doesn't exist, return empty list
+    if not BASE_DIR.exists():
+        return variables
+
+    # Get all models
+    models = [d for d in os.listdir(BASE_DIR) if (BASE_DIR / d).is_dir()]
+
+    for model in models:
+        # Check COG variables
+        cog_dir = safe_join(BASE_DIR, model, "cog", relative=True)
+        if cog_dir.exists():
+            cog_files = os.listdir(cog_dir)
+            cog_vars = set()
+            for filename in cog_files:
+                if filename.startswith("cog_") and filename.endswith(".tif"):
+                    # Extract variable name between "cog_" and timestamp
+                    parts = filename.split("cog_")[1].split("_")
+                    if len(parts) >= 2:
+                        # Variable name is everything before the timestamp
+                        var_parts = parts[:-1]
+                        variable = "_".join(var_parts)
+                        cog_vars.add(variable)
+
+            for variable in cog_vars:
+                variables.append({"variable": variable, "type": "cog", "model": model})
+
+        # Check velocity variables
+        velocity_dir = safe_join(BASE_DIR, model, "velocity", relative=True)
+        if velocity_dir.exists():
+            velocity_files = os.listdir(velocity_dir)
+            velocity_vars = set()
+            for filename in velocity_files:
+                if filename.startswith("leaflet_velocity_") and filename.endswith(
+                    ".json.gz"
+                ):
+                    # Extract variable name between "leaflet_velocity_" and timestamp
+                    parts = filename.split("leaflet_velocity_")[1].split("_")
+                    if len(parts) >= 2:
+                        # Variable name is everything before the timestamp
+                        var_parts = parts[:-1]
+                        variable = "_".join(var_parts)
+                        velocity_vars.add(variable)
+
+            for variable in velocity_vars:
+                variables.append(
+                    {"variable": variable, "type": "velocity", "model": model}
+                )
+
+    return variables
 
 
 def get_files_for_variable(
@@ -89,6 +151,27 @@ def get_files_for_variable(
                     )
 
     return files
+
+
+@router.get("/available/", response_model=AvailableVariablesResponse)
+@cache_response(ttl=3600)  # Cache for 1 hour
+async def get_available_variables_endpoint():
+    """
+    Endpoint to get the list of available variables with their associated type and model.
+    """
+    if not BASE_DIR.exists():
+        logger.error("Forecast directory {} not available.".format(BASE_DIR))
+        raise HTTPException(status_code=404, detail="Forecast not available")
+
+    variables = get_available_variables()
+
+    if not variables:
+        raise HTTPException(
+            status_code=404,
+            detail="No variables found in the forecast directory",
+        )
+
+    return AvailableVariablesResponse(variables=variables)
 
 
 @router.get("/list/", response_model=ForecastResponse)
