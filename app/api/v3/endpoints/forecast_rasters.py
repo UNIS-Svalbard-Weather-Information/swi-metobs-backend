@@ -155,9 +155,15 @@ def get_files_for_variable(
 
 @router.get("/available/", response_model=AvailableVariablesResponse)
 @cache_response(ttl=3600)  # Cache for 1 hour
-async def get_available_variables_endpoint():
+async def get_available_variables_endpoint(
+    type: Optional[str] = Query(
+        None, description="Filter by variable type (cog/velocity)"
+    ),
+    model: Optional[str] = Query(None, description="Filter by model name"),
+):
     """
     Endpoint to get the list of available variables with their associated type and model.
+    Can be filtered by type and/or model using query parameters.
     """
     if not BASE_DIR.exists():
         logger.error("Forecast directory {} not available.".format(BASE_DIR))
@@ -171,7 +177,20 @@ async def get_available_variables_endpoint():
             detail="No variables found in the forecast directory",
         )
 
-    return AvailableVariablesResponse(variables=variables)
+    # Apply filters if provided
+    filtered_variables = variables
+    if type:
+        filtered_variables = [v for v in filtered_variables if v["type"] == type]
+    if model:
+        filtered_variables = [v for v in filtered_variables if v["model"] == model]
+
+    if not filtered_variables:
+        raise HTTPException(
+            status_code=404,
+            detail="No variables found matching the specified filters",
+        )
+
+    return AvailableVariablesResponse(variables=filtered_variables)
 
 
 @router.get("/list/", response_model=ForecastResponse)
