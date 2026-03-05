@@ -213,15 +213,20 @@ def cache_response(ttl: int = 60):
                 if isinstance(result, BaseModel):
                     response_data = result.model_dump_json()
                     logger.debug(
-                        f"Serializing Pydantic model for caching: \n\n\n{response_data}\n\n\n"
+                        f"Serializing Pydantic model for caching: {response_data}"
                     )
                 elif isinstance(result, Response):
-                    # Handle FastAPI Response objects
-                    response_data = (
-                        result.body
-                        if hasattr(result, "body")
-                        else json.dumps(result.content)
-                    )
+                    if Response.media_type == "application/json":
+                        response_data = (
+                            result.body
+                            if hasattr(result, "body")
+                            else json.dumps(result.content)
+                        )
+                    else:
+                        logger.info(
+                            f"Response content type {Response.media_type} is not JSON, not caching"
+                        )
+                        return result
                 elif hasattr(result, "dict"):
                     # Handle Pydantic models - use model_dump() with mode='json' for proper serialization
                     try:
@@ -237,12 +242,10 @@ def cache_response(ttl: int = 60):
                         )
                         response_data = json.dumps(str(result))
                 else:
-                    # Handle other types - try to serialize, fall back to string if needed
-                    try:
-                        response_data = json.dumps(result)
-                    except (TypeError, ValueError):
-                        # Fall back to string representation if JSON serialization fails
-                        response_data = json.dumps(str(result))
+                    logger.info(
+                        f"Result type {type(result)} is not directly serializable, not caching"
+                    )
+                    return result
 
                 # Store in cache
                 cache_backend.setex(cache_key, ttl, response_data)
