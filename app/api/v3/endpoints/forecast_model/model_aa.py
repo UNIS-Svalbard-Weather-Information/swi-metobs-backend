@@ -215,8 +215,10 @@ class ModelAromeArctic(WeatherModel):
             f"Fetching dataset subset for variables: {vars} at x={self.x}, y={self.y}, time={self.time}"
         )
 
-        ds = ModelAromeArcticConnector().get_subset(
-            x=self.x, y=self.y, time=self.time, variables=frozenset(vars)
+        ds = (
+            ModelAromeArcticConnector()
+            .get_subset(x=self.x, y=self.y, time=self.time, variables=frozenset(vars))
+            .copy()
         )
 
         # This code is from the UNISACSI by Lukas Frank (MIT License)
