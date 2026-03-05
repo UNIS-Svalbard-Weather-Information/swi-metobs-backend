@@ -6,15 +6,19 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "dask[dataframe]>=2025.12.0",
-    "fastapi>=0.122.0",
+    "fastapi>=0.135.0",
     "fuzzywuzzy>=0.18.0",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
+    "metpy>=1.7.1",
+    "netcdf4>=1.7.4",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
+    "pyproj>=3.7.2",
     "python-levenshtein>=0.27.3",
     "redis>=7.2.1",
     "uvicorn>=0.38.0",
+    "xarray>=2026.2.0",
 ]
 
 [project.optional-dependencies]
@@ -37,6 +41,8 @@ dev = [
     "ipykernel>=7.1.0",
     "ipython>=9.8.0",
     "jinja2>=3.1.6",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.8",
     "pip>=25.3",
     "pre-commit>=4.5.1",
     "ruff>=0.14.10",

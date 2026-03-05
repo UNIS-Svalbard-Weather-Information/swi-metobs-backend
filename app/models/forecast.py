@@ -23,6 +23,24 @@ class AvailableVariablesResponse(BaseModel):
     variables: List[ForecastVariable]
 
 
+class ForecastModelInfo(BaseModel):
+    id: str
+    name: str
+    provider: str
+    resolution: str
+
+    @field_validator("resolution", mode="before")
+    def transform_to_km(cls, v):
+        if isinstance(v, int):
+            km = v / 1000
+            return f"{km}km"
+        return v
+
+
+class AvailableModelsResponse(BaseModel):
+    models: List[ForecastModelInfo]
+
+
 class ForecastRequestModel(BaseModel):
     variable: str
     models: Optional[List[str]] = None
