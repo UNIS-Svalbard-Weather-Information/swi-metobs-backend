@@ -215,6 +215,11 @@ def cache_response(ttl: int = 60):
                     logger.debug(
                         f"Serializing Pydantic model for caching: {response_data}"
                     )
+                if isinstance(result, dict):
+                    response_data = json.dumps(result)
+                    logger.debug(
+                        f"Serializing Pydantic model for caching: {response_data}"
+                    )
                 elif isinstance(result, Response):
                     if Response.media_type == "application/json":
                         response_data = (
