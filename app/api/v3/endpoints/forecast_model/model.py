@@ -68,6 +68,8 @@ def compute_wind_direction(x, y, projection=None, **kwargs):
     # Implement logic to compute wind direction from x and y wind components
     if projection:
         u, v = reproject_variable(x, y, projection, **kwargs)
+    else:
+        u, v = x, y
     return wind_direction(u, v)
 
 
@@ -75,6 +77,8 @@ def compute_wind_speed(x, y, projection=None, **kwargs):
     # Implement logic to compute wind speed from x and y wind components
     if projection:
         u, v = reproject_variable(x, y, projection, **kwargs)
+    else:
+        u, v = x, y
     return wind_speed(u, v)
 
 
