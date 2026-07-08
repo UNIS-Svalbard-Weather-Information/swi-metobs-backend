@@ -306,6 +306,7 @@ class ModelAromeArcticConnector:
     _instance = None
     _lock = threading.Lock()
     __endpoint__ = "https://thredds.met.no/thredds/dodsC/aromearcticlatest/archive/arome_arctic_det_2_5km_latest.nc"
+    ds_grid: xr.Dataset = None
     ds: xr.Dataset = None
     _last_used = None
     _inactivity_timeout = timedelta(minutes=5)
@@ -367,6 +368,10 @@ class ModelAromeArcticConnector:
         if self.ds is None:
             logger.info("Opening ModelAromeArcticConnector dataset...")
             self.ds = xr.open_dataset(self.__endpoint__)
+            if self.ds_grid is None:
+                logger.info("Getting Static Fields")
+                self.ds_grid = self.ds[["x", "y"]].load()
+
         self._last_used = datetime.now()
         self._restart_inactivity_timer()
 
@@ -378,9 +383,43 @@ class ModelAromeArcticConnector:
         with self._lock:
             self._check_inactivity()
             self._open_dataset()
-            subset = self.ds.sel(time=time, x=x, y=y, method="nearest")[variables_key]
+
+            idx_x, idx_y = self.check_grid_index(x, y)
+
+            subset = self.ds.isel(x=idx_x, y=idx_y).sel(time=time, method="nearest")[
+                variables_key
+            ]
             self._last_used = datetime.now()
             return subset.load()
+
+    def check_grid_index(self, x, y):
+        # Find the nearest indices
+        idx_x = np.argmin(np.abs(self.ds_grid.x.values - x))
+        idx_y = np.argmin(np.abs(self.ds_grid.y.values - y))
+
+        # Get the coordinates of the nearest grid point
+        nearest_x = self.ds_grid.x.values[idx_x]
+        nearest_y = self.ds_grid.y.values[idx_y]
+
+        # Calculate the distance between (x, y) and the nearest grid point
+        distance = np.sqrt((x - nearest_x) ** 2 + (y - nearest_y) ** 2)
+
+        # Check if the indices are within the grid bounds
+        if (
+            idx_x < 0
+            or idx_x >= len(self.ds_grid.x.values)
+            or idx_y < 0
+            or idx_y >= len(self.ds_grid.y.values)
+        ):
+            raise ValueError("Selected index is outside the grid bounds.")
+
+        # Check if the distance is within the allowed tolerance (3.6 km)
+        if distance > 3.6:
+            raise ValueError(
+                f"The location you requested is too far from the model’s coverage area. The nearest valid point is {distance:.2f} km away, but the maximum allowed distance is 3.6 km. Please adjust your request to stay within the model’s grid."
+            )
+
+        return idx_x, idx_y
 
     def close(self):
         if hasattr(self, "_timer"):
