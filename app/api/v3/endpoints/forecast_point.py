@@ -117,7 +117,7 @@ async def get_forecast_data(
         logger.error(f"Error fetching forecast data: {e}")
         raise HTTPException(status_code=500, detail="Error fetching forecast data")
 
-    if abs(ds.time.values - np.datetime64(time)) > np.timedelta64(1, "h"):
+    if abs(ds.time.values - np.datetime64(time)) > np.timedelta64(59, "m"):
         logger.warning(
             f"Requested time {time} is not available in the latest forecast. Closest available time is {ds.time.values}."
         )
