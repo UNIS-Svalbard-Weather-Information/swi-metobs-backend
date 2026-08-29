@@ -197,8 +197,8 @@ class ModelAromeArctic(WeatherModel):
         origin_y = self.projection["origin"]["y"]
         resolution = self.resolution  # 2.5 km resolution
 
-        nx = int((x - origin_x) / resolution)
-        ny = int((y - origin_y) / resolution)
+        nx = round((x - origin_x) / resolution)
+        ny = round((y - origin_y) / resolution)
 
         x = origin_x + nx * resolution
         y = origin_y + ny * resolution
@@ -304,12 +304,16 @@ class ModelAromeArctic(WeatherModel):
 
 class ModelAromeArcticConnector:
     _instance = None
-    _lock = threading.Lock()
+    # RLock (not Lock): close() acquires the lock but is also called from
+    # _check_inactivity(), which always runs with the lock already held by
+    # the same thread. A plain Lock would deadlock in that path.
+    _lock = threading.RLock()
     __endpoint__ = "https://thredds.met.no/thredds/dodsC/aromearcticlatest/archive/arome_arctic_det_2_5km_latest.nc"
     ds_grid: xr.Dataset = None
     ds: xr.Dataset = None
     _last_used = None
     _inactivity_timeout = timedelta(minutes=5)
+    MAX_GRID_DISTANCE_KM = 3.6
 
     def __new__(cls):
         if not cls._instance:
@@ -327,13 +331,8 @@ class ModelAromeArcticConnector:
                     self._start_inactivity_timer()
 
     def _start_inactivity_timer(self):
-        def timer_callback():
-            with self._lock:
-                self._check_inactivity()
-            self._restart_inactivity_timer()
-
         self._timer = threading.Timer(
-            self._inactivity_timeout.total_seconds(), timer_callback
+            self._inactivity_timeout.total_seconds(), self._timer_callback
         )
         self._timer.daemon = True
         self._timer.start()
@@ -350,7 +349,11 @@ class ModelAromeArcticConnector:
     def _timer_callback(self):
         with self._lock:
             self._check_inactivity()
-        self._restart_inactivity_timer()
+            still_open = self.ds is not None
+        # Once the dataset has been closed there's nothing left to time out;
+        # _open_dataset() restarts this chain the next time it's needed.
+        if still_open:
+            self._restart_inactivity_timer()
 
     def _check_inactivity(self):
         now = datetime.now()
@@ -371,6 +374,10 @@ class ModelAromeArcticConnector:
             if self.ds_grid is None:
                 logger.info("Getting Static Fields")
                 self.ds_grid = self.ds[["x", "y"]].load()
+            # Subsets cached from a previous dataset generation (e.g. before
+            # an inactivity close) may no longer reflect the newly opened
+            # "latest" model run, so drop them.
+            self.get_subset.cache_clear()
 
         self._last_used = datetime.now()
         self._restart_inactivity_timer()
@@ -401,8 +408,10 @@ class ModelAromeArcticConnector:
         nearest_x = self.ds_grid.x.values[idx_x]
         nearest_y = self.ds_grid.y.values[idx_y]
 
-        # Calculate the distance between (x, y) and the nearest grid point
-        distance = np.sqrt((x - nearest_x) ** 2 + (y - nearest_y) ** 2)
+        # Calculate the distance between (x, y) and the nearest grid point.
+        # x/y (and the grid) are in the projection's meters, so convert to km
+        # before comparing against MAX_GRID_DISTANCE_KM.
+        distance_km = np.sqrt((x - nearest_x) ** 2 + (y - nearest_y) ** 2) / 1000
 
         # Check if the indices are within the grid bounds
         if (
@@ -413,17 +422,18 @@ class ModelAromeArcticConnector:
         ):
             raise ValueError("Selected index is outside the grid bounds.")
 
-        # Check if the distance is within the allowed tolerance (3.6 km)
-        if distance > 3.6:
+        # Check if the distance is within the allowed tolerance
+        if distance_km > self.MAX_GRID_DISTANCE_KM:
             raise ValueError(
-                f"The location you requested is too far from the model’s coverage area. The nearest valid point is {distance:.2f} km away, but the maximum allowed distance is 3.6 km. Please adjust your request to stay within the model’s grid."
+                f"The location you requested is too far from the model’s coverage area. The nearest valid point is {distance_km:.2f} km away, but the maximum allowed distance is {self.MAX_GRID_DISTANCE_KM} km. Please adjust your request to stay within the model’s grid."
             )
 
         return idx_x, idx_y
 
     def close(self):
-        if hasattr(self, "_timer"):
-            self._timer.cancel()
-        if hasattr(self, "ds") and self.ds is not None:
-            self.ds.close()
-            self.ds = None
+        with self._lock:
+            if hasattr(self, "_timer"):
+                self._timer.cancel()
+            if hasattr(self, "ds") and self.ds is not None:
+                self.ds.close()
+                self.ds = None

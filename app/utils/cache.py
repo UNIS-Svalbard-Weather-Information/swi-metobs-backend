@@ -4,6 +4,7 @@ Cache utility module with Redis/memory fallback and test mode support.
 
 import os
 import json
+import base64
 import hashlib
 from typing import Any, Dict, Optional, Union
 from functools import wraps
@@ -61,19 +62,11 @@ def get_cache_backend() -> Optional[Union[redis.Redis, MemoryCache]]:
     global _cache_backend_instance
 
     # Return cached instance if available and cache is not disabled
-    # But allow re-evaluation if Redis is configured (for testing)
     current_cache_disabled = (
         os.getenv("SWI_METSERVICES_CACHE_DISABLED", "false").lower() == "true"
     )
-    redis_configured = os.getenv("SWI_METSERVICES_REDIS_HOST") and os.getenv(
-        "SWI_METSERVICES_REDIS_PORT"
-    )
 
-    if (
-        _cache_backend_instance is not None
-        and not current_cache_disabled
-        and not redis_configured
-    ):
+    if _cache_backend_instance is not None and not current_cache_disabled:
         return _cache_backend_instance
 
     # Check if cache is disabled (test mode)
@@ -100,7 +93,8 @@ def get_cache_backend() -> Optional[Union[redis.Redis, MemoryCache]]:
             # Test connection
             if redis_client.ping():
                 logger.info(f"Using Redis cache at {redis_host}:{redis_port}")
-                return redis_client
+                _cache_backend_instance = redis_client
+                return _cache_backend_instance
             else:
                 logger.warning("Redis connection failed, falling back to memory cache")
         except Exception as e:
@@ -142,26 +136,21 @@ def generate_cache_key_from_args(func, args, kwargs) -> str:
     Returns:
         str: Cache key
     """
-    # Create a unique key based on function name and arguments
-    args_part = []
-
-    # Add positional arguments
-    for arg in args:
-        args_part.append(str(arg))
-
-    args_part.sort()
+    # Create a unique key based on function name and arguments.
+    # Positional order is preserved (it's semantically meaningful); kwargs are
+    # sorted by key for determinism.
+    args_part = [str(arg) for arg in args]
 
     kwargs_part = []
 
-    # Add keyword arguments (sorted for consistency)
+    # Add keyword arguments (sorted for consistency). FastAPI-injected Request/
+    # Response objects have no stable repr (it embeds the object's memory
+    # address), so they're excluded regardless of the parameter's name.
     for key, value in sorted(kwargs.items()):
-        if str(key) == "response":
+        if isinstance(value, (Request, Response)):
             continue
         kwargs_part.append(f"{key}={value}")
 
-    kwargs_part.sort()
-
-    # cache_key = hashlib.md5(key_str.encode()).hexdigest()
     return f"cache:{func.__name__}:{':'.join(args_part)}:{':'.join(kwargs_part)}"
 
 
@@ -187,18 +176,51 @@ def cache_response(ttl: int = 60):
                 logger.debug("Cache disabled, executing function normally")
                 return await func(*args, **kwargs)
 
+            # FastAPI-injected Response side-channel (e.g. `response: Response`
+            # params used to set headers), if the endpoint declares one.
+            response_obj = kwargs.get("response")
+            if not isinstance(response_obj, Response):
+                response_obj = None
+
             # Generate cache key from function arguments
             cache_key = generate_cache_key_from_args(func, args, kwargs)
             logger.debug(f"Cache key: {cache_key}")
 
             # Try to get cached response
-            cached_data = cache_backend.get(cache_key)
+            try:
+                cached_data = cache_backend.get(cache_key)
+            except Exception as e:
+                logger.warning(f"Cache read failed for {cache_key}: {e}")
+                cached_data = None
+
             if cached_data:
                 logger.debug(f"Cache hit for {cache_key}")
                 try:
                     cached_response = json.loads(cached_data)
+                    if isinstance(cached_response, dict) and cached_response.get(
+                        "__cached_binary_response__"
+                    ):
+                        return Response(
+                            content=base64.b64decode(cached_response["body"]),
+                            media_type=cached_response.get("media_type"),
+                            status_code=cached_response.get("status_code", 200),
+                            headers=cached_response.get("headers") or None,
+                        )
+                    if isinstance(cached_response, dict) and cached_response.get(
+                        "__cached_with_headers__"
+                    ):
+                        if response_obj is not None:
+                            for k, v in cached_response.get("headers", {}).items():
+                                response_obj.headers[k] = v
+                        return cached_response["data"]
                     return cached_response
-                except json.JSONDecodeError:
+                except (
+                    json.JSONDecodeError,
+                    UnicodeDecodeError,
+                    KeyError,
+                    TypeError,
+                    ValueError,
+                ):
                     logger.warning(f"Invalid cached data for {cache_key}")
                     cache_backend.delete(cache_key)
 
@@ -210,17 +232,31 @@ def cache_response(ttl: int = 60):
 
             # Cache successful results
             try:
-                if isinstance(result, BaseModel):
+                if isinstance(result, Response):
+                    # Handle FastAPI Response objects (e.g. binary bodies like
+                    # NetCDF) by base64-encoding the body so it round-trips
+                    # through JSON/UTF-8 safely, and preserving media type,
+                    # status code and headers so a cache hit can reconstruct
+                    # an equivalent Response.
+                    response_data = json.dumps(
+                        {
+                            "__cached_binary_response__": True,
+                            "body": base64.b64encode(result.body or b"").decode(
+                                "ascii"
+                            ),
+                            "media_type": result.media_type,
+                            "status_code": result.status_code,
+                            "headers": {
+                                k: v
+                                for k, v in result.headers.items()
+                                if k.lower() not in ("content-length", "content-type")
+                            },
+                        }
+                    )
+                elif isinstance(result, BaseModel):
                     response_data = result.model_dump_json()
                     logger.debug(
                         f"Serializing Pydantic model for caching: \n\n\n{response_data}\n\n\n"
-                    )
-                elif isinstance(result, Response):
-                    # Handle FastAPI Response objects
-                    response_data = (
-                        result.body
-                        if hasattr(result, "body")
-                        else json.dumps(result.content)
                     )
                 elif hasattr(result, "dict"):
                     # Handle Pydantic models - use model_dump() with mode='json' for proper serialization
@@ -243,6 +279,20 @@ def cache_response(ttl: int = 60):
                     except (TypeError, ValueError):
                         # Fall back to string representation if JSON serialization fails
                         response_data = json.dumps(str(result))
+
+                # If the endpoint mutates a side-channel `response` object
+                # (e.g. to set headers) rather than returning a Response
+                # itself, snapshot those headers so a future cache hit can
+                # replay them - a cache hit otherwise skips the function body
+                # entirely and those mutations would never happen.
+                if response_obj is not None and not isinstance(result, Response):
+                    response_data = json.dumps(
+                        {
+                            "__cached_with_headers__": True,
+                            "data": json.loads(response_data),
+                            "headers": dict(response_obj.headers),
+                        }
+                    )
 
                 # Store in cache
                 cache_backend.setex(cache_key, ttl, response_data)

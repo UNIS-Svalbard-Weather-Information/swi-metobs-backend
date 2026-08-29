@@ -63,11 +63,12 @@ class TestForecastEndpoints:
         assert response.status_code in [200, 404]
         if response.status_code == 200:
             data = response.json()
-            assert isinstance(data, list)
-            if len(data) > 0:
-                assert data[0]["model"] == "test_model"
-                assert "temperature" in data[0]["file_path"]
-                assert "timestamp" in data[0]
+            assert "forecast" in data
+            assert isinstance(data["forecast"], list)
+            if len(data["forecast"]) > 0:
+                assert data["forecast"][0]["model"] == "test_model"
+                assert "temperature" in data["forecast"][0]["file_path"]
+                assert "timestamp" in data["forecast"][0]
 
     async def test_get_available_forecast_files_nonexistent_variable(self, client):
         """Test getting forecast files for non-existent variable."""

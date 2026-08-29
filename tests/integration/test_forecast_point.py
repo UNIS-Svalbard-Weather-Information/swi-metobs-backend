@@ -217,7 +217,32 @@ class TestForecastPointEndpoints:
                     "time": test_time,
                 },
             )
-            assert response.status_code == 500
+            assert response.status_code == 400
+            data = response.json()
+            assert "detail" in data
+
+    async def test_get_forecast_data_netcdf_invalid_type(self, client):
+        """Test getting NetCDF forecast data with invalid type returns 400, not 500."""
+        models_response = client.get("/v3/point-forecast/models/")
+        assert models_response.status_code == 200
+        models_data = models_response.json()
+
+        if len(models_data["models"]) > 0:
+            model_id = models_data["models"][0]["id"]
+            test_time = (datetime.now() + timedelta(hours=1)).strftime(
+                "%Y-%m-%dT%H:%M:%S"
+            )
+
+            response = client.get(
+                f"/v3/point-forecast/{model_id}/invalid_type/nc",
+                params={
+                    "variables": ["air_temperature_2m"],
+                    "lat": 78.0,
+                    "lon": -25.0,
+                    "time": test_time,
+                },
+            )
+            assert response.status_code == 400
             data = response.json()
             assert "detail" in data
 

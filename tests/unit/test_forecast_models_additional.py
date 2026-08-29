@@ -1,5 +1,9 @@
+import threading
 import numpy as np
+import pytest
+import xarray as xr
 from datetime import datetime
+from unittest.mock import MagicMock
 from app.api.v3.endpoints.forecast_model.model import (
     reproject_variable,
     compute_wind_direction,
@@ -136,3 +140,67 @@ class TestModelAromeArcticAdditionalCoverage:
         profile_vars = list(ModelAromeArctic.variables_profile.keys())
         result = _select_variables(profile_vars, ModelAromeArctic.variables_profile)
         assert len(result) > 0
+
+
+class TestModelAromeArcticConnector:
+    """Unit tests for ModelAromeArcticConnector's grid distance check and locking.
+
+    ModelAromeArcticConnector is a process-wide singleton, so tests restore
+    whatever `ds_grid`/`ds` was set on it beforehand to avoid bleeding state
+    into other tests.
+    """
+
+    @pytest.fixture
+    def connector(self):
+        from app.api.v3.endpoints.forecast_model.model_aa import (
+            ModelAromeArcticConnector,
+        )
+
+        conn = ModelAromeArcticConnector()
+        original_ds_grid = conn.ds_grid
+        original_ds = conn.ds
+        yield conn
+        conn.ds_grid = original_ds_grid
+        conn.ds = original_ds
+
+    def test_check_grid_index_distance_tolerance_is_kilometers(self, connector):
+        """Regression test: distance is computed in meters and must be
+        compared in kilometers against MAX_GRID_DISTANCE_KM (3.6), not
+        compared directly against the raw meter value.
+        """
+        # Two grid points 10 km apart so a query point can be placed clearly
+        # inside/outside the 3.6 km tolerance around the nearest one.
+        connector.ds_grid = xr.Dataset(
+            {"x": ("x", [0.0, 10000.0]), "y": ("y", [0.0, 10000.0])}
+        )
+
+        # 3 km from the (0, 0) grid point: within tolerance.
+        idx_x, idx_y = connector.check_grid_index(3000.0, 0.0)
+        assert (idx_x, idx_y) == (0, 0)
+
+        # 4.2 km from the (0, 0) grid point: outside tolerance.
+        with pytest.raises(ValueError, match="3.6 km"):
+            connector.check_grid_index(4200.0, 0.0)
+
+    def test_close_does_not_deadlock_when_called_while_lock_held(self, connector):
+        """close() is invoked from _check_inactivity(), which always runs
+        with the lock already held by the calling thread. Regression test
+        for the RLock fix - a plain Lock would deadlock here.
+        """
+        fake_ds = MagicMock()
+        connector.ds = fake_ds
+
+        result = {}
+
+        def worker():
+            with connector._lock:
+                connector.close()
+            result["done"] = True
+
+        t = threading.Thread(target=worker)
+        t.start()
+        t.join(timeout=2)
+
+        assert result.get("done") is True, "close() appears to have deadlocked"
+        assert connector.ds is None
+        fake_ds.close.assert_called_once()

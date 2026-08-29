@@ -30,17 +30,13 @@ class WeatherModel(ABC):
     time: datetime = None
 
     @abstractmethod
-    def get_profile(
-        self, lat: float, lon: float, time: str, variable: str
-    ) -> StationTimeseries:
-        """Fetch profile data for a given variable at a specific location and time."""
+    def get_profile(self, variable: List[str]) -> StationTimeseries:
+        """Fetch profile data for the requested variables (location/time are set on __init__)."""
         pass
 
     @abstractmethod
-    def get_surface(
-        self, lat: float, lon: float, time: str, variable: str
-    ) -> StationTimeseries:
-        """Fetch surface data for a given variable at a specific location and time."""
+    def get_surface(self, variable: List[str]) -> StationTimeseries:
+        """Fetch surface data for the requested variables (location/time are set on __init__)."""
         pass
 
 
