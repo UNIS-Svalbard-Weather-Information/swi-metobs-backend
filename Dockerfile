@@ -19,6 +19,9 @@ ARG API_VERSION
 ARG PYTHON_VERSION
 WORKDIR /swi
 
+# curl is needed for the HEALTHCHECK below
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Copy only necessary files from the builder stage
 COPY --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
@@ -33,8 +36,8 @@ ENV WORKERS=4
 ENV API_ROOT_PATH="/public"
 
 # Healthcheck
-# HEALTHCHECK --interval=30s --timeout=3s \
-#     CMD curl -f http://localhost:${PORT}/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Expose the port
 EXPOSE $PORT
