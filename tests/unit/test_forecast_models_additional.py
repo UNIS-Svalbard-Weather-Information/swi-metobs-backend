@@ -55,6 +55,35 @@ class TestForecastModelAdditionalCoverage:
         assert result_x[0] == 0.0
         assert result_y[0] == 0.0
 
+    def test_reproject_variable_longitude_wraparound(self):
+        """Test reproject_variable when the meridian/longitude difference
+        crosses the +/-180 degree antimeridian boundary and must wrap.
+        """
+        x = np.array([1.0])
+        y = np.array([0.0])
+
+        # diffn = 170 - (-170) = 340 > 180, should wrap to 340 - 360 = -20
+        projection_positive_wrap = {
+            "latitude_of_projection_origin": 0.0,
+            "longitude_of_central_meridian": 170.0,
+        }
+        result_x, result_y = reproject_variable(
+            x, y, projection=projection_positive_wrap, longitude=-170.0, latitude=0.0
+        )
+        assert result_x is not None
+        assert result_y is not None
+
+        # diffn = -170 - 170 = -340 < -180, should wrap to -340 + 360 = 20
+        projection_negative_wrap = {
+            "latitude_of_projection_origin": 0.0,
+            "longitude_of_central_meridian": -170.0,
+        }
+        result_x, result_y = reproject_variable(
+            x, y, projection=projection_negative_wrap, longitude=170.0, latitude=0.0
+        )
+        assert result_x is not None
+        assert result_y is not None
+
     def test_compute_wind_functions_with_projection(self):
         """Test wind computation functions with projection reprojection."""
         projection = {

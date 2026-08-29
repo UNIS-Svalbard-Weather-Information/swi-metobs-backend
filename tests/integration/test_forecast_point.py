@@ -183,7 +183,7 @@ class TestForecastPointEndpoints:
         test_time = (datetime.now() + timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%S")
 
         response = client.get(
-            "/v3/forecast/invalid_model/surface",
+            "/v3/point-forecast/invalid_model/surface",
             params={
                 "variables": ["air_temperature_2m"],
                 "lat": 78.0,

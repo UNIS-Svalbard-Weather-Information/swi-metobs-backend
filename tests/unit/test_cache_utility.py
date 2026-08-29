@@ -3,6 +3,7 @@ Unit tests for the cache utility module.
 """
 
 import os
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 import app.utils.cache as cache_module
@@ -188,6 +189,18 @@ class TestCacheBackendSelection:
         mock_redis.assert_called_once()
 
         # Clean up
+        del os.environ["SWI_METSERVICES_REDIS_HOST"]
+        del os.environ["SWI_METSERVICES_REDIS_PORT"]
+
+    def test_redis_init_error_falls_back_to_memory_cache(self):
+        """Test that an error constructing the Redis client (e.g. a bad port) falls back to MemoryCache."""
+        os.environ["SWI_METSERVICES_REDIS_HOST"] = "localhost"
+        os.environ["SWI_METSERVICES_REDIS_PORT"] = "not-a-port"
+        os.environ.pop("SWI_METSERVICES_CACHE_DISABLED", None)
+
+        backend = get_cache_backend()
+        assert isinstance(backend, MemoryCache)
+
         del os.environ["SWI_METSERVICES_REDIS_HOST"]
         del os.environ["SWI_METSERVICES_REDIS_PORT"]
 
@@ -377,6 +390,192 @@ class TestCacheResponseDecorator:
         finally:
             if original_cache_disabled is not None:
                 os.environ["SWI_METSERVICES_CACHE_DISABLED"] = original_cache_disabled
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_response_serializes_basemodel(self, mock_get_backend):
+        """A pydantic BaseModel result is serialized via model_dump_json."""
+        from pydantic import BaseModel as PydanticBaseModel
+
+        class SampleModel(PydanticBaseModel):
+            value: str
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def model_endpoint():
+            return SampleModel(value="hello")
+
+        result = await model_endpoint()
+
+        assert result.value == "hello"
+        _, _, stored_data = mock_cache.setex.call_args[0]
+        assert json.loads(stored_data) == {"value": "hello"}
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_response_serializes_object_with_dict_method(
+        self, mock_get_backend
+    ):
+        """A non-BaseModel result exposing a `.dict()` method (e.g. a
+        Pydantic v1-style object) is serialized through that method.
+        """
+
+        class DictLike:
+            def dict(self):
+                return {"foo": "bar"}
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def dictlike_endpoint():
+            return DictLike()
+
+        await dictlike_endpoint()
+
+        _, _, stored_data = mock_cache.setex.call_args[0]
+        assert json.loads(stored_data) == {"foo": "bar"}
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_response_serializes_object_with_model_dump(
+        self, mock_get_backend
+    ):
+        """A non-BaseModel result exposing `model_dump()` (but not `.dict()`)
+        is serialized through model_dump(mode="json").
+        """
+
+        class ModelDumpLike:
+            def dict(self):
+                raise AssertionError("model_dump() should be preferred over dict()")
+
+            def model_dump(self, mode="json"):
+                return {"baz": "qux"}
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def model_dump_endpoint():
+            return ModelDumpLike()
+
+        await model_dump_endpoint()
+
+        _, _, stored_data = mock_cache.setex.call_args[0]
+        assert json.loads(stored_data) == {"baz": "qux"}
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_response_dict_serialization_falls_back_to_string(
+        self, mock_get_backend
+    ):
+        """If a `.dict()`-exposing result can't be JSON-serialized, fall back
+        to caching its string representation instead of raising.
+        """
+
+        class Unserializable:
+            def dict(self):
+                return {"bad": object()}
+
+            def __str__(self):
+                return "Unserializable()"
+
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def unserializable_endpoint():
+            return Unserializable()
+
+        await unserializable_endpoint()
+
+        _, _, stored_data = mock_cache.setex.call_args[0]
+        assert json.loads(stored_data) == "Unserializable()"
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_response_plain_unserializable_result_falls_back_to_string(
+        self, mock_get_backend
+    ):
+        """A plain result with no `.dict()` that isn't JSON-serializable
+        (e.g. a set) is cached as its string representation.
+        """
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def set_endpoint():
+            return {1, 2, 3}
+
+        await set_endpoint()
+
+        _, _, stored_data = mock_cache.setex.call_args[0]
+        assert json.loads(stored_data) == str({1, 2, 3})
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_read_error_falls_back_to_cache_miss(self, mock_get_backend):
+        """A cache backend error on read (e.g. a transient Redis error)
+        degrades to a cache miss instead of raising.
+        """
+        mock_cache = MagicMock()
+        mock_cache.get.side_effect = Exception("boom")
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def test_function():
+            return {"result": "test"}
+
+        response = await test_function()
+
+        assert response == {"result": "test"}
+        mock_cache.setex.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_hit_with_corrupted_data_recomputes(self, mock_get_backend):
+        """Corrupted cached data (not valid JSON) is treated as a cache miss,
+        deleted, and the function is recomputed rather than raising.
+        """
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = "not valid json {{{"
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def test_function():
+            return {"result": "recomputed"}
+
+        response = await test_function()
+
+        assert response == {"result": "recomputed"}
+        mock_cache.delete.assert_called_once()
+        mock_cache.setex.assert_called_once()
+
+    @pytest.mark.asyncio
+    @patch("app.utils.cache.get_cache_backend")
+    async def test_cache_set_error_does_not_break_call(self, mock_get_backend):
+        """An error while storing to the cache backend (e.g. setex failing)
+        doesn't prevent the function's result from being returned.
+        """
+        mock_cache = MagicMock()
+        mock_cache.get.return_value = None
+        mock_cache.setex.side_effect = Exception("boom")
+        mock_get_backend.return_value = mock_cache
+
+        @cache_response(ttl=60)
+        async def test_function():
+            return {"result": "test"}
+
+        response = await test_function()
+
+        assert response == {"result": "test"}
 
 
 class TestEnvironmentVariableHandling:
