@@ -39,8 +39,8 @@ ENV WORKERS=4
 ENV API_ROOT_PATH="/public"
 
 # Healthcheck
-# HEALTHCHECK --interval=30s --timeout=3s \
-#     CMD curl -f http://localhost:${PORT}/health || exit 1
+HEALTHCHECK --interval=30s --timeout=3s \
+    CMD curl -f http://localhost:${PORT}/health || exit 1
 
 # Expose the port
 EXPOSE $PORT
