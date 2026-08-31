@@ -1,0 +1,56 @@
+# Python virtual environment
+venv/
+.venv
+.env/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build and distribution directories
+dist/
+build/
+*.egg-info/
+
+# Environment files (if not needed at runtime)
+.env
+.env.local
+.env.*
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Test directories
+tests/
+pytest_cache/
+
+# Docker files (if not needed in the image)
+Dockerfile*
+docker-compose*.yml
+docker-compose*.override.yml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Node.js (if not relevant)
+node_modules/
+package-lock.json
+
+# Git
+.git/
+.gitignore
+
+# Cache and temporary files
+*.cache
+*.tmp
+
+#Demo data 
+data

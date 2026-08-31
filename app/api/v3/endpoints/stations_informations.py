@@ -9,9 +9,9 @@ from fuzzywuzzy import fuzz, process
 router = APIRouter()
 
 # Path to the JSON files
-STATIONS_FILE = Path("./data/000_stations_status/all_dict.json")
-ONLINE_STATIONS_FILE = Path("./data/000_stations_status/online_dict.json")
-OFFLINE_STATIONS_FILE = Path("./data/000_stations_status/offline_dict.json")
+STATIONS_FILE = Path("./data/realtime/000_stations_status/all_dict.json")
+ONLINE_STATIONS_FILE = Path("./data/realtime/000_stations_status/online_dict.json")
+OFFLINE_STATIONS_FILE = Path("./data/realtime/000_stations_status/offline_dict.json")
 
 
 @router.get("/online", response_model=dict[str, StationMetadata])

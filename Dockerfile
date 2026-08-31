@@ -1,4 +1,4 @@
-ARG PYTHON_VERSION=3.13
+ARG PYTHON_VERSION=3.14
 ARG API_VERSION=3.X.X
 
 # Stage 1: Dependency resolution
@@ -19,8 +19,11 @@ ARG API_VERSION
 ARG PYTHON_VERSION
 WORKDIR /swi
 
-# curl is needed for the HEALTHCHECK below
-RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+# Install curl and clean up
+RUN apt-get update && \
+    apt-get install -y curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy only necessary files from the builder stage
 COPY --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
@@ -43,4 +46,4 @@ HEALTHCHECK --interval=30s --timeout=3s \
 EXPOSE $PORT
 
 # Run the app
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --root-path ${API_ROOT_PATH}
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --root-path ${API_ROOT_PATH}"]
