@@ -10,8 +10,8 @@ from loguru import logger
 router = APIRouter()
 
 # Define paths as variables
-LATEST_DATA_PATH = "./data/000_latest_obs/latest_dict.json"
-HOURLY_DATA_PATH = "./data/000_hourly_data/{offset}.json"
+LATEST_DATA_PATH = "./data/realtime/000_latest_obs/latest_dict.json"
+HOURLY_DATA_PATH = "./data/realtime/000_hourly_data/{offset}.json"
 MIN_TIME_OFFSET = -24
 MAX_TIME_OFFSET = 24
 

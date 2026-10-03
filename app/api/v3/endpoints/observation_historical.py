@@ -10,6 +10,7 @@ from app.models.stations import (
 )
 from app.utils.path import safe_join
 from app.utils.error import handle_validation_error
+from app.utils.cache import cache_response
 import dask.dataframe as dd
 import os
 import pandas as pd
@@ -20,8 +21,8 @@ from pathlib import Path
 router = APIRouter()
 
 # Define paths
-LONG_TIMESERIES_PATH = Path("./data/000_long_timeseries")
-STATIONS_STATUS_PATH = Path("./data/000_stations_status/all_dict.json")
+LONG_TIMESERIES_PATH = Path("./data/historical/000_long_timeseries")
+STATIONS_STATUS_PATH = Path("./data/realtime/000_stations_status/all_dict.json")
 
 # Constants
 MAX_TIMESTEPS = 200
@@ -61,6 +62,7 @@ def check_station_exists(station_id: str) -> bool:
         500: {"description": "Error reading station list"},
     },
 )
+@cache_response(ttl=3600)
 async def get_stations_where_historical_data_are_available() -> List[str]:
     """
     Get list of stations with available long term timeseries data.
@@ -96,6 +98,7 @@ async def get_stations_where_historical_data_are_available() -> List[str]:
         500: {"description": "Error getting available variables"},
     },
 )
+@cache_response(ttl=3600)
 async def get_available_variables_for_the_station_historical_observations(
     station_id: str,
 ) -> List[str]:
@@ -138,13 +141,13 @@ async def get_available_variables_for_the_station_historical_observations(
         500: {"description": "Internal server error"},
     },
 )
+@cache_response(ttl=360)
 async def get_available_historical_time_range_for_a_station(
     station_id: str,
 ) -> StationsAvailableHistoricalDates:
     """
     Get the available date range for a specific station's timeseries data.
     """
-    logger.info("ok")
     handle_validation_error(StationIDModel, id=station_id)
 
     try:
@@ -176,6 +179,7 @@ async def get_available_historical_time_range_for_a_station(
 
 
 @router.get("/{station_id}", response_model=StationTimeseries)
+@cache_response(ttl=360)
 async def get_station_historical_observations(
     station_id: str,
     start_date: str = Query(..., description="Start date in YYYY-MM-DD format"),

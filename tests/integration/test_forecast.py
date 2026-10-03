@@ -11,6 +11,50 @@ class TestForecastEndpoints:
     def client(self):
         return TestClient(app)
 
+    async def test_get_available_variables(self, client):
+        """Test getting available variables."""
+        response = client.get("/v3/forecast/available/")
+        # Check if it returns 200 with data or 404 if no variables found
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "variables" in data
+            assert isinstance(data["variables"], list)
+
+    async def test_get_available_variables_with_filters(self, client):
+        """Test getting available variables with type and model filters."""
+        # Test with type filter
+        response = client.get("/v3/forecast/available/?type=cog")
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "variables" in data
+            assert isinstance(data["variables"], list)
+            # If we have data, all should be cog type
+            if len(data["variables"]) > 0:
+                for var in data["variables"]:
+                    assert var["type"] == "cog"
+
+        # Test with model filter
+        response = client.get("/v3/forecast/available/?model=test_model")
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "variables" in data
+            assert isinstance(data["variables"], list)
+            # If we have data, all should be from test_model
+            if len(data["variables"]) > 0:
+                for var in data["variables"]:
+                    assert var["model"] == "test_model"
+
+        # Test with both filters
+        response = client.get("/v3/forecast/available/?type=cog&model=test_model")
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            data = response.json()
+            assert "variables" in data
+            assert isinstance(data["variables"], list)
+
     async def test_get_available_forecast_files(self, client):
         """Test getting available forecast files."""
         response = client.get("/v3/forecast/list/?variable=temperature")
@@ -19,11 +63,12 @@ class TestForecastEndpoints:
         assert response.status_code in [200, 404]
         if response.status_code == 200:
             data = response.json()
-            assert isinstance(data, list)
-            if len(data) > 0:
-                assert data[0]["model"] == "test_model"
-                assert "temperature" in data[0]["file_path"]
-                assert "timestamp" in data[0]
+            assert "forecast" in data
+            assert isinstance(data["forecast"], list)
+            if len(data["forecast"]) > 0:
+                assert data["forecast"][0]["model"] == "test_model"
+                assert "temperature" in data["forecast"][0]["file_path"]
+                assert "timestamp" in data["forecast"][0]
 
     async def test_get_available_forecast_files_nonexistent_variable(self, client):
         """Test getting forecast files for non-existent variable."""

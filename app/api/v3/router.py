@@ -4,11 +4,19 @@ from app.api.v3.endpoints import observation_historical
 from app.api.v3.endpoints import observation_latest
 from app.api.v3.endpoints import stations_informations
 from app.api.v3.endpoints import spheres
+from app.api.v3.endpoints import forecast_point
 
 api_router = APIRouter()
 api_router.include_router(
-    forecast_rasters.router, prefix="/forecast", tags=["Weather Forecast"]
+    forecast_rasters.router, prefix="/forecast", tags=["Weather Forecast Rasters"]
 )
+
+api_router.include_router(
+    forecast_point.router,
+    prefix="/point-forecast",
+    tags=["Weather Forecast Point Data"],
+)
+
 api_router.include_router(
     stations_informations.router, prefix="/station-status", tags=["Station Status"]
 )
