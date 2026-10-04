@@ -15,7 +15,7 @@ from app.utils.cache import cache_response
 
 
 from loguru import logger
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 
@@ -28,6 +28,9 @@ FORECAST_MODELS = {"aa": ModelAromeArctic}
 # "latest" file as a rolling dataset; a full hour risks matching a forecast
 # step that has just rolled off the served file.
 FORECAST_TIME_TOLERANCE = np.timedelta64(59, "m")
+
+# A time series covers at most the length of one AROME-Arctic run.
+MAX_SERIES_HOURS = 72
 
 
 def _resolve_forecast_dataset(
@@ -140,6 +143,66 @@ async def get_available_variables(
         raise HTTPException(status_code=400, detail="Invalid type specified")
 
     return AvailableVariablesResponse(variables=variable_list)
+
+
+def _parse_utc(value: str, name: str) -> datetime:
+    """ISO time to the dataset's naive UTC; times with an offset are converted."""
+    try:
+        parsed = datetime.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid {name} time format")
+    if parsed.tzinfo is not None:
+        parsed = parsed.astimezone(timezone.utc).replace(tzinfo=None)
+    return parsed
+
+
+@router.get("/{model}/surface/timeseries")
+@cache_response(ttl=600)  # Cache for 10 minutes
+async def get_forecast_timeseries(
+    model: str,
+    variables: list[str] = Query(..., description="Variables to retrieve"),
+    lat: float = Query(..., description="Latitude of the location"),
+    lon: float = Query(..., description="Longitude of the location"),
+    start: str = Query(..., description="First time of the series (ISO format)"),
+    end: str = Query(..., description="Last time of the series (ISO format)"),
+) -> Response:
+    """Surface forecast at a location for every forecast hour from start to end.
+
+    One dataset read covers the whole range, where the single-time endpoint
+    needs one request per hour. Hours outside the latest run are left out, so
+    a range without forecast answers an empty series.
+    """
+    if model not in FORECAST_MODELS:
+        raise HTTPException(status_code=404, detail="Model not available")
+
+    start_time = _parse_utc(start, "start")
+    end_time = _parse_utc(end, "end")
+    if end_time < start_time:
+        raise HTTPException(status_code=400, detail="end must not be before start")
+    if end_time - start_time > timedelta(hours=MAX_SERIES_HOURS):
+        raise HTTPException(
+            status_code=400,
+            detail=f"A series covers at most {MAX_SERIES_HOURS} hours",
+        )
+
+    model_cls = FORECAST_MODELS[model](latitude=lat, longitude=lon, time=start_time)
+    try:
+        ds = model_cls.get_surface_series(
+            variable=variables, start=start_time, end=end_time
+        )
+    except ValueError as ve:
+        handle_processing_error(ve, status_code=400, details=str(ve))
+    except Exception as e:
+        handle_processing_error(
+            e, status_code=500, details="Error fetching forecast data"
+        )
+
+    stid = "forecast_{model}_surface_{lat:.0f}_{lon:.0f}".format(
+        model=model,
+        lat=ds.latitude.values * 1e4,
+        lon=ds.longitude.values * 1e4,
+    )
+    return format_xarray_to_timeseries(ds, station_id=stid.replace(".", ""))
 
 
 @router.get("/{model}/{ftype}")
