@@ -98,8 +98,10 @@ def setup_test_data():
     with open("./data/realtime/000_latest_obs/latest_dict.json", "w") as f:
         json.dump(latest_data, f)
 
+    # The caching job writes null for a station with no data for that hour
+    hourly_data = {**latest_data, "NULL001": {"id": "NULL001", "timeseries": None}}
     with open("./data/realtime/000_hourly_data/-1.json", "w") as f:
-        json.dump(latest_data, f)
+        json.dump(hourly_data, f)
 
     # Create forecast directory structure
     forecast_model_dir = Path("./data/forecast/test_model/cog")
