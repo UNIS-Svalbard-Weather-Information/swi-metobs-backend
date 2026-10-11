@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.2.1](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.2.0...3.2.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **observations:** return empty timeseries when the cache stores null ([#33](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/issues/33)) ([f8fa786](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/f8fa786c4b6c2188cb429e4abb36730d2e24eb4c))
+* update dependencies ([7d853f9](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/7d853f9525ae7bc8f824c193bfaf995f2400c408))
+
 ## [3.2.0](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.1.0...3.2.0) (2026-10-04)
 
 
