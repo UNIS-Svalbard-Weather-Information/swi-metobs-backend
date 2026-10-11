@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.2.2](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.2.1...3.2.2) (2026-10-11)
+
+
+### Bug Fixes
+
+* **deps:** refresh uv.lock to current releases ([23bf69c](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/23bf69c5d352e8adacc7a695965de654547a1ade))
+
 ## [3.2.1](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.2.0...3.2.1) (2026-10-11)
 
 
