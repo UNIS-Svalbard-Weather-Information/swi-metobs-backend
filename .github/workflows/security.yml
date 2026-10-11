@@ -1,0 +1,20 @@
+name: Security
+
+# Thin caller: the checks live in swi-shared-workflows. Do not edit the jobs here,
+# change them there. Copy this file unchanged to .github/workflows/security.yml.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  security:
+    uses: UNIS-Svalbard-Weather-Information/swi-shared-workflows/.github/workflows/security.yml@main
+    with:
+      shared-ref: main
