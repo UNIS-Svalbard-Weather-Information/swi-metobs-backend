@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.2.0](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.1.0...3.2.0) (2026-10-04)
+
+
+### Features
+
+* point forecast time series endpoint ([#31](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/issues/31)) ([1432ef2](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/1432ef2300aa2500d00bae9008ed44e00ab742f5))
+
+## [3.1.0](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.0.6...3.1.0) (2026-10-03)
+
+
+### Features
+
+* Add AROME-Arctic single-point forecast API with response caching ([479d367](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/479d367f1309ac5efc8e24a429674b872ffc81e2))
+
 ## [3.0.6](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.0.5...3.0.6) (2026-08-29)
 
 

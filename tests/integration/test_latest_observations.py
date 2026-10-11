@@ -53,3 +53,19 @@ class TestLatestObservationsEndpoints:
         data = response.json()
         assert "detail" in data
         assert "out of range" in data["detail"]
+
+    async def test_station_without_data_for_the_hour_returns_empty_timeseries(
+        self, client
+    ):
+        """The caching job stores null when a station has no data for an hour."""
+        response = client.get("/v3/observations/stations/NULL001?offset=-1")
+        assert response.status_code == 200
+        assert response.json() == {"id": "NULL001", "timeseries": []}
+
+    async def test_all_stations_with_a_null_timeseries(self, client):
+        """One station without data must not fail the whole listing."""
+        response = client.get("/v3/observations/stations?offset=-1")
+        assert response.status_code == 200
+        by_id = {s["id"]: s for s in response.json()}
+        assert by_id["NULL001"]["timeseries"] == []
+        assert len(by_id["TEST001"]["timeseries"]) > 0

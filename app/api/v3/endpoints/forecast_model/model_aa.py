@@ -168,6 +168,17 @@ class ModelAromeArctic(WeatherModel):
 
         return ds[variable]
 
+    def get_surface_series(
+        self, variable: List[str], start: datetime, end: datetime
+    ) -> xr.Dataset:
+        """Surface variables at every forecast hour from start to end (inclusive), in one read."""
+        variables_download = _select_variables(variable, self.variables_surface)
+
+        ds = self._get_ds(variables_download, time_range=(start, end))
+        ds = self._compute_variable_functions(ds, variable)
+
+        return ds[variable]
+
     ####################################################################
     ####################################################################
     # Internal helper methods for coordinate transformation and dataset handling
@@ -205,7 +216,7 @@ class ModelAromeArctic(WeatherModel):
 
         return x, y
 
-    def _get_ds(self, variables: List[str]):
+    def _get_ds(self, variables: List[str], time_range: tuple | None = None):
         vars = set(variables)
         if "air_pressure_ml" in vars:
             vars.remove("air_pressure_ml")
@@ -215,11 +226,17 @@ class ModelAromeArctic(WeatherModel):
             f"Fetching dataset subset for variables: {vars} at x={self.x}, y={self.y}, time={self.time}"
         )
 
-        ds = (
-            ModelAromeArcticConnector()
-            .get_subset(x=self.x, y=self.y, time=self.time, variables=frozenset(vars))
-            .copy()
-        )
+        connector = ModelAromeArcticConnector()
+        if time_range:
+            start, end = time_range
+            subset = connector.get_subset_range(
+                x=self.x, y=self.y, start=start, end=end, variables=frozenset(vars)
+            )
+        else:
+            subset = connector.get_subset(
+                x=self.x, y=self.y, time=self.time, variables=frozenset(vars)
+            )
+        ds = subset.copy()
 
         # This code is from the UNISACSI by Lukas Frank (MIT License)
         if "air_pressure_ml" in variables:
@@ -378,6 +395,7 @@ class ModelAromeArcticConnector:
             # an inactivity close) may no longer reflect the newly opened
             # "latest" model run, so drop them.
             self.get_subset.cache_clear()
+            self.get_subset_range.cache_clear()
 
         self._last_used = datetime.now()
         self._restart_inactivity_timer()
@@ -395,6 +413,28 @@ class ModelAromeArcticConnector:
 
             subset = self.ds.isel(x=idx_x, y=idx_y).sel(time=time, method="nearest")[
                 variables_key
+            ]
+            self._last_used = datetime.now()
+            return subset.load()
+
+    @lru_cache(maxsize=128)
+    def get_subset_range(
+        self,
+        x: float,
+        y: float,
+        start: datetime,
+        end: datetime,
+        variables: frozenset[str],
+    ) -> xr.Dataset:
+        """Every time step from start to end at one grid point: a single OPeNDAP read."""
+        with self._lock:
+            self._check_inactivity()
+            self._open_dataset()
+
+            idx_x, idx_y = self.check_grid_index(x, y)
+
+            subset = self.ds.isel(x=idx_x, y=idx_y).sel(time=slice(start, end))[
+                list(variables)
             ]
             self._last_used = datetime.now()
             return subset.load()
