@@ -79,7 +79,7 @@ async def get_station_observations(station_id: str, offset: int = 0):
 
     # Create the response model
     return StationTimeseries(
-        id=station_id, timeseries=station_data.get("timeseries", [])
+        id=station_id, timeseries=station_data.get("timeseries") or []
     )
 
 
@@ -121,7 +121,7 @@ async def get_all_stations_observations(offset: int = 0):
     for station_id, station_data in data.items():
         stations.append(
             StationTimeseries(
-                id=station_id, timeseries=station_data.get("timeseries", [])
+                id=station_id, timeseries=station_data.get("timeseries") or []
             )
         )
 
