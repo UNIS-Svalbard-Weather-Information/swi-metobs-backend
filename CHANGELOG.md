@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.3.1](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.3.0...3.3.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* **spheres:** expose the Living Ice Project photographer as author ([dc3e2ca](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/dc3e2ca53cd1495480b6ce0fa1cb3962b03e4226))
+* **spheres:** expose the Living Ice Project photographer as author ([8662f86](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/8662f86830d7ddf11b7285d3483304635ef02cfa))
+
 ## [3.3.0](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.2.2...3.3.0) (2026-10-14)
 
 
