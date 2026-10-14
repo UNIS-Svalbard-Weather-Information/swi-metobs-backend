@@ -44,9 +44,12 @@ The spheres functionality can be configured using environment variables:
 **Sphere Data Sources:**
 - `SPHERE_LIP_GEOJSON_FETCH`: URL for The Living Ice Project GeoJSON data (default: `https://livingiceproject.com/static/shapes/spheres.geojson`)
 - `SPHERE_LIP_BASE_URL`: Base URL for The Living Ice Project assets (default: `https://livingiceproject.com/`)
+- `SPHERE_SVALBOX_GEOJSON_FETCH`: URL for the Svalbox photo sphere WFS, as GeoJSON (default: the `svalbox:photo_sphere` layer on `svalbox.unis.no`). Spheres less than 3 m apart are reduced to the most recent picture, and title, authors and license are read once per DOI from Zenodo (cached 24h)
 
 **Caching:**
 - The system automatically caches GeoJSON data and computed distance/bearing matrices for 1 hour
+- Each project's sphere list (for Svalbox: already deduplicated and credited) is also stored for 1 hour in the shared cache (Redis when `SWI_METSERVICES_REDIS_HOST`/`PORT` are set, in-memory otherwise), and Zenodo records for 24 hours, so workers and nodes do not each refetch them
+- The spheres are loaded in the background when the server starts, so the first request does not wait for the providers
 
 ## Usage
 
