@@ -333,7 +333,7 @@ def parse_geojson_feature_to_sphere_node(
         id=node_id,
         gps=gps,
         panorama=absolute_panorama,  # Let the model handle URL resolution
-        thumbnail=absolute_thumbnail,  # Let the model handle URL resolution
+        thumbnail=absolute_thumbnail or None,  # Optional: not every source has one
         links=[],  # Will be populated later if needed
         author=properties.get("author"),
         date=properties.get("date"),
