@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 
 from app.api.v3.endpoints import spheres
 from app.main import app
-from app.models.spheres import SphereGeojson
+from app.models.spheres import SphereGeojson, SphereNodePanorama
 from app.utils.cache import MemoryCache
 
 client = TestClient(app)
@@ -266,3 +266,150 @@ class TestSvalboxProvider:
         assert response.status_code == 200
         ids = {f["properties"]["id"] for f in response.json()["features"]}
         assert ids == {"lip-1", "svalbox-a-new", "svalbox-b"}
+
+
+class FakeAsyncClient:
+    """Stands in for httpx.AsyncClient in fetch_geojson_from_url."""
+
+    calls = []
+    payload = {"type": "FeatureCollection", "features": []}
+    error = None
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, url):
+        FakeAsyncClient.calls.append(url)
+        if FakeAsyncClient.error:
+            raise FakeAsyncClient.error
+        return self
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return FakeAsyncClient.payload
+
+
+class TestFetchGeojson:
+    @pytest.fixture(autouse=True)
+    def fake_httpx(self, monkeypatch):
+        FakeAsyncClient.calls = []
+        FakeAsyncClient.error = None
+        spheres._cache_timestamp.clear()
+        monkeypatch.setattr(spheres.httpx, "AsyncClient", FakeAsyncClient)
+        yield
+        spheres._cache_timestamp.clear()
+
+    async def test_fetches_then_serves_from_cache(self):
+        first = await spheres.fetch_geojson_from_url("https://example.com/a")
+        second = await spheres.fetch_geojson_from_url("https://example.com/a")
+
+        assert first == second == FakeAsyncClient.payload
+        assert FakeAsyncClient.calls == ["https://example.com/a"]
+
+    async def test_failure_is_an_http_500(self):
+        FakeAsyncClient.error = RuntimeError("provider down")
+
+        with pytest.raises(HTTPException) as error:
+            await spheres.fetch_geojson_from_url("https://example.com/down")
+
+        assert error.value.status_code == 500
+
+
+class TestSharedCacheFallbacks:
+    async def test_invalid_cached_spheres_are_reloaded(self, monkeypatch, shared_cache):
+        serve(monkeypatch, **{SVALBOX_URL: svalbox_geojson()})
+        key = "spheres:nodes:Svalbox"
+        shared_cache.setex(key, 60, '[{"not": "a sphere"}]')
+
+        nodes = await spheres.get_all_sphere_nodes()
+
+        assert {n.id for n in nodes} == {"svalbox-a-new", "svalbox-b"}
+        # and the bad entry was replaced by a good one
+        assert "svalbox-b" in shared_cache.get(key)
+
+    async def test_no_dois_means_no_zenodo_call(self, zenodo_calls):
+        assert await spheres.fetch_dois_metadata(set()) == {}
+        assert zenodo_calls == []
+
+    async def test_lip_feature_that_cannot_be_parsed_is_skipped(self, monkeypatch):
+        geojson = lip_geojson()
+        geojson["features"].append(
+            {
+                "type": "Feature",
+                "geometry": {"type": "Point", "coordinates": [16.0, 78.0]},
+                "properties": {"id": "no-panorama"},
+            }
+        )
+        serve(monkeypatch, **{LIP_URL: geojson})
+
+        nodes = await spheres.get_all_sphere_nodes()
+
+        assert [n.id for n in nodes] == ["lip-1"]
+
+
+class TestLipParser:
+    def test_relative_urls_use_the_base_url(self):
+        feature = {
+            "geometry": {"coordinates": [16.0, 78.0, 12.0]},
+            "properties": {
+                "id": "rel",
+                "filename": "spheres/a.jpg",
+                "thumbnail": "/thumbs/a.jpg",
+            },
+        }
+
+        node = spheres.parse_geojson_feature_to_sphere_node(
+            feature, "https://example.com/"
+        )
+
+        assert str(node.panorama) == "https://example.com/spheres/a.jpg"
+        assert str(node.thumbnail) == "https://example.com/thumbs/a.jpg"
+        assert node.gps == [16.0, 78.0, 12.0]
+
+    def test_invalid_coordinates_fall_back_to_origin(self):
+        feature = {
+            "geometry": {"coordinates": []},
+            "properties": {"id": "x", "filename": "https://example.com/x.jpg"},
+        }
+
+        node = spheres.parse_geojson_feature_to_sphere_node(feature)
+
+        assert node.gps == [0.0, 0.0]
+        assert node.thumbnail is None
+
+
+class TestMatrices:
+    def test_nodes_without_a_position_are_ignored(self):
+        broken = SphereNodePanorama.model_construct(
+            id="broken", gps=[1.0], panorama="https://example.com/b.jpg", links=[]
+        )
+        spheres._spatial_index["broken"] = broken
+
+        spheres.SpatialIndex._compute_distance_and_bearing_matrices()
+
+        assert spheres._distance_matrix == {"broken": {}}
+
+
+class TestStartup:
+    def test_lifespan_starts_the_warm_up(self, monkeypatch):
+        calls = []
+
+        async def fake_warm_up():
+            calls.append("warm_up")
+
+        from app import main
+
+        monkeypatch.setattr(main, "warm_up_spheres", fake_warm_up)
+
+        with TestClient(main.app):
+            pass
+
+        assert calls == ["warm_up"]
