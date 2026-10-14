@@ -1,5 +1,22 @@
 # Changelog
 
+## [3.3.0](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.2.2...3.3.0) (2026-10-14)
+
+
+### Features
+
+* **docker:** run the API as an unprivileged user ([1fae47a](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/1fae47a04f302f0442b6483f67f6e617959d3c67))
+* **docker:** run the API as an unprivileged user ([dc00bfa](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/dc00bfafd7e66e77526f4da3f5031d0b1305fdd9))
+* **spheres:** add Svalbox photospheres ([648dd80](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/648dd805ef2bc522d1d375faf60ea15b4c6efc56))
+* **spheres:** add Svalbox photospheres as a provider ([56da3ee](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/56da3eeea05effb9e27b46a7ecb249117cd62aa3))
+* **spheres:** load spheres in the background at startup ([07585e5](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/07585e533474cd523f94cee5be8d5e675a1f24c0))
+* **spheres:** optional thumbnail, license and doi fields ([c19ded7](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/c19ded71463030147bca67743532b68981717f91))
+
+
+### Bug Fixes
+
+* **spheres:** treat a missing thumbnail as none in the LIP parser ([92182e9](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/92182e9a4c10e15ffd4d7d583ad86dbc9759c922))
+
 ## [3.2.2](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.2.1...3.2.2) (2026-10-11)
 
 
