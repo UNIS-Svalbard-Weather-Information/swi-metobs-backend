@@ -335,7 +335,8 @@ def parse_geojson_feature_to_sphere_node(
         panorama=absolute_panorama,  # Let the model handle URL resolution
         thumbnail=absolute_thumbnail or None,  # Optional: not every source has one
         links=[],  # Will be populated later if needed
-        author=properties.get("author"),
+        # The Living Ice Project credits the photographer as "artist"
+        author=properties.get("author") or properties.get("artist") or None,
         date=properties.get("date"),
         project=properties.get("project"),
         label=properties.get("label"),
