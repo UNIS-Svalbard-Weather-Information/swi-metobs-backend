@@ -26,6 +26,7 @@ STATIONS_STATUS_PATH = Path("./data/realtime/000_stations_status/all_dict.json")
 
 # Constants
 MAX_TIMESTEPS = 200
+MAX_RANGE_DAYS = 366
 
 
 def get_available_dates_for_station(station_id: str) -> List[str]:
@@ -218,11 +219,26 @@ async def get_station_historical_observations(
                 detail=f"Historical data not available for station {station_id}",
             )
 
+        if start_date > end_date:
+            raise HTTPException(
+                status_code=400,
+                detail="start_date must be on or before end_date.",
+            )
+
         filtered_dates = [date for date in all_dates if start_date <= date <= end_date]
         if not filtered_dates:
             raise HTTPException(
                 status_code=404,
                 detail=f"No historical data available for the station {station_id} in the date range {start_date} to {end_date}.",
+            )
+
+        # Bound the amount of file I/O before reading any parquet: the
+        # MAX_TIMESTEPS guard below only triggers after the (potentially huge)
+        # read, so cap the number of day-files up front.
+        if len(filtered_dates) > MAX_RANGE_DAYS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Requested date range spans {len(filtered_dates)} days, which exceeds the maximum of {MAX_RANGE_DAYS}. Please narrow the range.",
             )
 
         parquet_files = [

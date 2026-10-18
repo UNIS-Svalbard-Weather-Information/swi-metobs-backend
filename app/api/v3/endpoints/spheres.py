@@ -1,4 +1,4 @@
-from fastapi import HTTPException, APIRouter
+from fastapi import HTTPException, APIRouter, Query
 from app.models.spheres import SphereGeojson, SphereNodePanorama, SphereNode
 from app.utils.cache import cache_response, get_cache_backend
 import json
@@ -615,7 +615,9 @@ async def get_sphere_geojson() -> SphereGeojson:
 @router.get("/{node_id}", response_model=SphereNodePanorama)
 @cache_response(ttl=360)
 async def get_sphere_panorama_and_links(
-    node_id: str, max_range: float = 10000, sectors: int = 5
+    node_id: str,
+    max_range: float = 10000,
+    sectors: int = Query(5, ge=1),
 ):
     """
     Return the detail of one sphere with neighboring nodes within a distance of

@@ -52,6 +52,13 @@ class TestHistoricalObservationsEndpoints:
         assert "temperature" in data["timeseries"][0]
         assert "humidity" in data["timeseries"][0]
 
+    async def test_get_historical_data_inverted_range(self, client):
+        """start_date after end_date is rejected with 400, not 404/500."""
+        response = client.get(
+            "/v3/historical/TEST001?start_date=2023-01-02&end_date=2023-01-01"
+        )
+        assert response.status_code == 400
+
     async def test_get_historical_data_nonexistent_station(self, client):
         """Test getting historical data for non-existent station."""
         response = client.get("/v3/historical/NONEXISTENT/date-range")
