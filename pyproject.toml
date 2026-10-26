@@ -12,6 +12,7 @@ dependencies = [
     "loguru>=0.7.3",
     "metpy>=1.7.1",
     "netcdf4>=1.7.4",
+    "numpy>=2.0",
     "pandas>=2.3.3",
     "pydantic>=2.12.5",
     "pyproj>=3.7.2",

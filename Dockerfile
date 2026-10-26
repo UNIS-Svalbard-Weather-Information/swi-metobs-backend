@@ -4,19 +4,25 @@ ARG API_VERSION=3.X.X
 # Stage 1: Dependency resolution
 FROM astral/uv:python${PYTHON_VERSION}-bookworm-slim AS uv
 WORKDIR /swi
-COPY pyproject.toml .
-RUN uv pip compile pyproject.toml > requirements.txt
+COPY pyproject.toml uv.lock ./
+# Export the locked, hashed set: the image installs exactly what uv.lock pins.
+RUN uv export --frozen --no-dev --no-emit-project -o requirements.txt
 
 # Stage 2: Build
 FROM python:${PYTHON_VERSION}-slim AS builder
 WORKDIR /swi
 COPY --from=uv /swi/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt
 
 # Stage 3: Runtime
 FROM python:${PYTHON_VERSION}-slim
 ARG API_VERSION
 ARG PYTHON_VERSION
+# The project reserves uids above 9000. Every SWI image that shares a volume with this one
+# (the cron jobs that write the data, mapproxy) uses the same uid and gid, so the files
+# this service reads and the user it runs as always match.
+ARG APP_UID=9001
+ARG APP_GID=9001
 WORKDIR /swi
 
 # Install curl and clean up
@@ -28,8 +34,22 @@ RUN apt-get update && \
 # Copy only necessary files from the builder stage
 COPY --from=builder /usr/local/lib/python${PYTHON_VERSION}/site-packages /usr/local/lib/python${PYTHON_VERSION}/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+# The service never installs packages at runtime: remove pip (and its vendored copies
+# of urllib3, msgpack, ...) so they are neither exposed nor flagged by image scanners.
+RUN python -m pip uninstall -y pip setuptools wheel 2>/dev/null || true
 
-# Copy application code
+# Unprivileged user
+RUN groupadd --gid "${APP_GID}" swi \
+    && useradd --uid "${APP_UID}" --gid "${APP_GID}" --create-home --shell /usr/sbin/nologin swi
+
+# The service only reads the three data volumes (mounted read-only). Create the mount
+# points owned by the service user: an empty named volume inherits the ownership of the
+# directory it is mounted on, so whichever container mounts a fresh volume first, it ends
+# up owned by the same uid as the cron jobs that write it.
+RUN mkdir -p /swi/data/forecast /swi/data/historical /swi/data/realtime \
+    && chown -R swi:swi /swi/data
+
+# Copy application code (owned by root: the service cannot modify its own code)
 COPY . .
 RUN echo "VERSION = '${API_VERSION}'" > ./app/version.py
 
@@ -44,6 +64,8 @@ HEALTHCHECK --interval=30s --timeout=3s \
 
 # Expose the port
 EXPOSE $PORT
+
+USER swi
 
 # Run the app
 CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT} --workers ${WORKERS} --root-path ${API_ROOT_PATH}"]

@@ -19,15 +19,19 @@ class SphereNode(BaseModel):
 
 class SphereNodePanorama(SphereNode):
     panorama: HttpUrl
-    thumbnail: HttpUrl
+    thumbnail: Optional[HttpUrl] = None
     links: list[SphereNode]
     author: Optional[str] = None
     date: Optional[datetime] = None
     project: Optional[str] = None
     label: Optional[str] = None
+    license: Optional[str] = None
+    doi: Optional[str] = None
 
     @field_validator("panorama", "thumbnail")
-    def validate_image_url(cls, value: HttpUrl) -> HttpUrl:
+    def validate_image_url(cls, value: Optional[HttpUrl]) -> Optional[HttpUrl]:
+        if value is None:
+            return value
         valid_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".thumbnail"}
         if not any(str(value).lower().endswith(ext) for ext in valid_extensions):
             raise ValueError(
@@ -49,6 +53,8 @@ class Properties(BaseModel):
     date: Optional[datetime] = None
     project: Optional[str] = None
     label: Optional[str] = None
+    license: Optional[str] = None
+    doi: Optional[str] = None
 
 
 class Feature(BaseModel):
@@ -73,8 +79,11 @@ class SphereGeojson(BaseModel):
                 date=node.date,
                 project=node.project,
                 label=node.label,
+                license=node.license,
+                doi=node.doi,
             )
-            geometry = Geometry(coordinates=node.gps)
+            # [lon, lat] only, as existing map clients expect; altitude stays on /{id}
+            geometry = Geometry(coordinates=node.gps[:2])
             feature = Feature(properties=properties, geometry=geometry)
             features.append(feature)
         return cls(features=features)
