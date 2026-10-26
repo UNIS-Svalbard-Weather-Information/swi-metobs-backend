@@ -1,5 +1,14 @@
 # Changelog
 
+## [3.3.2](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.3.1...3.3.2) (2026-10-26)
+
+
+### Bug Fixes
+
+* consolidate dependency updates and fix path-injection alert ([dfbbdc5](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/dfbbdc56217b10a8b08eb5637787b88a305226b3))
+* **deps:** consolidate dependency updates ([396dfec](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/396dfecae4d8cbfeccb1b0685ac33cf7e5c21744))
+* **security:** select observation data files from a fixed allow-list ([a694dc4](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/commit/a694dc4763c36ee473a7f9146a8e334a904bf280))
+
 ## [3.3.1](https://github.com/UNIS-Svalbard-Weather-Information/swi-metobs-backend/compare/3.3.0...3.3.1) (2026-10-14)
 
 
