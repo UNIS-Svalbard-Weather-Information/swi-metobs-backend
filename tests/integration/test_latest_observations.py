@@ -54,6 +54,41 @@ class TestLatestObservationsEndpoints:
         assert "detail" in data
         assert "out of range" in data["detail"]
 
+    async def test_offset_lower_bound_reads_a_missing_file(self, client):
+        """-24 is a valid offset: the request passes validation, the file is absent."""
+        response = client.get("/v3/observations/stations/TEST001?offset=-24")
+        assert response.status_code == 404
+        assert response.json()["detail"] == "Data not found"
+
+    async def test_offset_below_lower_bound(self, client):
+        response = client.get("/v3/observations/stations/TEST001?offset=-25")
+        assert response.status_code == 400
+        assert "out of range" in response.json()["detail"]
+
+    async def test_forecast_offset_refused_when_disabled(self, client):
+        response = client.get("/v3/observations/stations/TEST001?offset=1")
+        assert response.status_code == 400
+        assert response.json()["detail"] == "Forecast data is not enabled"
+
+    async def test_out_of_range_message_gives_the_real_upper_bound(self, client):
+        """With forecast disabled the valid range is -24 to 0."""
+        response = client.get("/v3/observations/stations/TEST001?offset=25")
+        assert "between -24 and 0" in response.json()["detail"]
+
+    @pytest.mark.parametrize(
+        "offset, status",
+        [(-25, 400), (25, 400), (1, 400), (-24, 404)],
+    )
+    async def test_all_stations_offset_validation(self, client, offset, status):
+        response = client.get(f"/v3/observations/stations?offset={offset}")
+        assert response.status_code == status
+
+    @pytest.mark.parametrize("offset", ["../../etc/passwd", "-1/../0", "1.5", ""])
+    async def test_non_integer_offset_is_rejected(self, client, offset):
+        """The offset never reaches the filesystem unless it is an integer."""
+        response = client.get("/v3/observations/stations", params={"offset": offset})
+        assert response.status_code == 422
+
     async def test_station_without_data_for_the_hour_returns_empty_timeseries(
         self, client
     ):
